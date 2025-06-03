@@ -4,3 +4,5 @@ created_players.txt
 *.png
 
 
+/backends/*/data/
+/backends/*/logs/
