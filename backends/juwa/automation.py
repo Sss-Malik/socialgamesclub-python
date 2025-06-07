@@ -1,72 +1,112 @@
+import logging
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from backends.juwa.config import LOGS_DIR, LOGIN_URL, USERNAME, PASSWORD, DATA_DIR, BACKEND_NAME, USER_MANAGEMENT_URL
+from backends.juwa.config import *
+from common.utils.logger import get_backend_logger
+from common.utils.credential_utils import generate_credentials
+from common.utils.ensure_directories import ensure_directories
+from common.utils.handle_captcha import handle_captcha
+from common.utils.save_credentials import save_credentials
 
-from common.logger import get_backend_logger
-from common.captcha_solver import solve_captcha_with_retries
-from common.credential_utils import generate_credentials
-
-
-def run():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Set up logger (writes to both console + logs/automation.log)
-    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info(f"Starting automation for backend: {BACKEND_NAME}")
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+def _login_and_navigate(logger: logging.Logger):
+    logger.info("Launching browser via Playwright (headed mode)...")
+    playwright = sync_playwright().start()
+    try:
+        browser = playwright.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
+        logger.info("Navigating to login page: %s", LOGIN_URL)
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
-        try:
-            logger.info(f"Opening login page: {LOGIN_URL}")
-            page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
+        page.fill(LOGIN_ACCOUNT, USERNAME)
+        page.fill(LOGIN_PASSWORD, PASSWORD)
 
-            page.wait_for_selector('input[placeholder="Please enter your account"]', timeout=15_000)
+        if CAPTCHA:
+            handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_INPUT, CAPTCHA_DIR)
 
-            captcha_code = solve_captcha_with_retries(page, save_dir=DATA_DIR)
-            logger.info(f"Captcha recognized as: {captcha_code}")
-            page.fill('input[placeholder="Please enter the verification code"]', captcha_code)
+        if DEBUG:
+            try:
+                input("DEBUG: Manually complete CAPTCHA and press Enter...")
+            except Exception:
+                logger.warning("DEBUG input skipped.")
 
-            input("Captcha code extracted. Press enter to continue...")
+        page.click(LOGIN_BUTTON)
+        page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000)
+        logger.info("Login successful.")
 
-            page.fill('input[placeholder="Please enter your account"]', USERNAME)
-            page.fill('input[placeholder="Please enter your password"]', PASSWORD)
-            page.wait_for_timeout(1500)
-            page.click('button:has-text("Sign in")')
-
-            page.wait_for_selector('section.app-main', timeout=15_000)
-
+        if URL_CHANGE:
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
-            page.click('button:has-text("Add Player")')
+        return playwright, browser, context, page
 
-            page.wait_for_selector('input[placeholder="Player’s account name (7-16 characters)"]')
+    except Exception as e:
+        logger.exception("Login error: %s", e)
+        try: browser.close()
+        except: pass
+        playwright.stop()
+        raise
 
-            new_username, new_password = generate_credentials()
+def _create_single_account(page, logger: logging.Logger):
+    try:
+        page.wait_for_selector(CREATE_ACCOUNT_INIT, timeout=15_000).click()
+        page.wait_for_selector(ACCOUNT_ID, timeout=10_000)
 
-            page.fill('input[placeholder="Player’s account name (7-16 characters)"]', new_username)
-            page.fill(
-                'input[placeholder="Length must be 6-16 characters! Must include a combination of numbers and letters, and allows some special characters: !@#$%^/.,()"]',
-                new_password)
+        account_id, password = generate_credentials(BACKEND_SIGNATURE)
+        logger.info("Generated credentials: %s / [REDACTED]", account_id)
 
-            page.click('button:has-text("OK")')
+        page.fill(ACCOUNT_ID, account_id)
+        page.fill(ACCOUNT_PASSWORD, password)
+        page.fill(CONFIRM_PASSWORD, password)
+        page.click(CREATE_ACCOUNT)
 
-            created_file = DATA_DIR / "created_players.txt"
-            with created_file.open("a", encoding="utf-8") as f:
-                f.write(f"{new_username}:{new_password}\n")
-            logger.info(f"✅ Created player saved: {new_username}:{new_password}")
+        try:
+            el = page.wait_for_selector(ACCOUNT_SUCCESS, timeout=3_000, state="attached")
+            text = el.inner_text().lower()
+            if any(phrase in text for phrase in ACCOUNT_SUCCESS_MSG):
+                logger.info("✅ Account created successfully.")
+                save_credentials(account_id, password, logger, DATA_DIR)
+            else:
+                logger.warning("⚠️ Unexpected success message: %s", text)
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ No success message after creating account.")
+    except Exception as e:
+        logger.exception("Account creation failed: %s", e)
 
-            input("Press Enter to close the browser...")
 
+def action_create_account(count: int):
+    ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("==== Starting account creation (%d accounts) ====", count)
 
-        except PlaywrightTimeoutError as te:
-            logger.error(f"TimeoutError: {te}")
+    playwright = browser = context = page = None
+    try:
+        playwright, browser, context, page = _login_and_navigate(logger)
+
+        for i in range(count):
+            logger.info("Creating account #%d of %d", i + 1, count)
+            _create_single_account(page, logger)
+
+            try:
+                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            except Exception as e:
+                logger.warning("Failed to reload User Management page: %s", e)
+
+    except Exception as e:
+        logger.exception("Fatal error in account creation loop: %s", e)
+    finally:
+        logger.info("==== Finished account creation ====")
+        # Uncomment to auto-close browser
+        try:
+            browser.close()
+            playwright.stop()
+            logger.debug("Browser and Playwright closed.")
         except Exception as e:
-            logger.exception(f"Unhandled Exception: {e}")
-        finally:
-            logger.info("Automation run completed. Browser remains open (headed mode).")
-            # If you want browser to close automatically, uncomment:
-            # browser.close()
+            logger.warning("Error closing browser/playwright: %s", e)
+
+
+def action_account_topup(count: int):
+    """
+    Stub for future implementation.
+    """
+    pass
