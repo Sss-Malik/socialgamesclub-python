@@ -6,3 +6,6 @@ created_players.txt
 
 /backends/*/data/
 /backends/*/logs/
+
+__pycache__/
+*.pyc
