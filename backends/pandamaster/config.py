@@ -1,0 +1,41 @@
+from pathlib import Path
+
+
+# — Backend identification (used for logging, data paths, etc.) —
+BACKEND_NAME = "pandamaster"
+DEBUG = True
+BACKEND_SIGNATURE = "PM"
+
+# — Login credentials (hard-coded for this backend) —
+LOGIN_URL = "https://pandamaster.vip/default.aspx"
+USERNAME  = "TestPM159"
+PASSWORD  = "Test_159872"
+CAPTCHA = False
+URL_CHANGE = False
+USER_MANAGEMENT_URL = None
+
+# — Paths for this backend (relative to the project root) —
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+LOGS_DIR = BASE_DIR / "logs"
+CAPTCHA_DIR = DATA_DIR / "captcha"
+# Ensure data/ and logs/ exist (automation will call .mkdir())
+
+# Selectors
+LOGIN_ACCOUNT = "#txtLoginName"
+LOGIN_PASSWORD = "#txtLoginPass"
+LOGIN_BUTTON = "#btnLogin"
+CAPTCHA_IMG = "img#ImageCheck"
+CAPTCHA_INPUT = "#txtVerifyCode"
+MAIN_PAGE_EL = "iframe#frm_main_content"
+LEFT_IFRAME = "iframe#frm_main_content"
+USER_MANAGEMENT_XPATH = "xpath=//span[contains(text(),'User Management')]"
+MAIN_IFRAME = "iframe#frm_main_content"
+CREATE_ACCOUNT_INIT = "xpath=//a[contains(text(),'Create Player')]"
+CREATE_ACCOUNT_DIALOG = "xpath=//iframe[contains(@src,'CreateAccount.aspx')]"
+ACCOUNT_ID = "#txtAccount"
+ACCOUNT_PASSWORD = "#txtLogonPass"
+CONFIRM_PASSWORD = "#txtLogonPass2"
+CREATE_ACCOUNT = "xpath=//a[contains(@class,'btn13') and contains(text(),'Create Player')]"
+ACCOUNT_SUCCESS = '.el-message.el-message--success'
+ACCOUNT_SUCCESS_MSG = ["added successfully", "success", "created"]
