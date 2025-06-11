@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 def handle_captcha(page, logger: logging.Logger, captcha_img, captcha_input, save_dir, timeout=10_000):
     try:
+        page.wait_for_timeout(10_000)
         captcha_el = page.wait_for_selector(captcha_img, timeout=timeout)
         logger.info("CAPTCHA detected. Solving...")
         text = solve_captcha(captcha_el, save_dir, logger)

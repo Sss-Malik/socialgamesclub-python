@@ -18,6 +18,8 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 LOGS_DIR = BASE_DIR / "logs"
 CAPTCHA_DIR = DATA_DIR / "captcha"
+UTILS_DIR = BASE_DIR / "utils"
+
 # Ensure data/ and logs/ and data/captcha exist (automation will call .mkdir())
 
 # Selectors

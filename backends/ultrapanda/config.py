@@ -1,17 +1,17 @@
 from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
-BACKEND_NAME = "vblink"
-DEBUG = True
-BACKEND_SIGNATURE = "VB"
+BACKEND_NAME = "pandamaster"
+DEBUG = False
+BACKEND_SIGNATURE = "PM"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://gm.vblink777.club/#/login"
-USERNAME  = "TestVB159"
-PASSWORD  = "Test12345"
+LOGIN_URL = "https://ht.ultrapanda.mobi/#/login"
+USERNAME  = "TestUP159"
+PASSWORD  = "Test1234"
 CAPTCHA = False
 URL_CHANGE = True
-USER_MANAGEMENT_URL = "https://gm.vblink777.club/#/manage-user/account"
+USER_MANAGEMENT_URL = "https://ht.ultrapanda.mobi/#/manage-user/account"
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent

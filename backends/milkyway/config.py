@@ -2,15 +2,15 @@ from pathlib import Path
 
 
 # — Backend identification (used for logging, data paths, etc.) —
-BACKEND_NAME = "pandamaster"
-DEBUG = True
-BACKEND_SIGNATURE = "PM"
+BACKEND_NAME = "milkyway"
+DEBUG = False
+BACKEND_SIGNATURE = "MW"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://pandamaster.vip/default.aspx"
-USERNAME  = "TestPM159"
+LOGIN_URL = "https://milkywayapp.xyz:8781/default.aspx"
+USERNAME  = "TestMW159"
 PASSWORD  = "Test_159872"
-CAPTCHA = False
+CAPTCHA = True
 URL_CHANGE = False
 USER_MANAGEMENT_URL = None
 

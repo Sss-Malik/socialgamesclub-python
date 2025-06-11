@@ -16,7 +16,7 @@ def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeou
         # Initialize solver
         solver = imagecaptcha()
         solver.set_verbose(1)
-        solver.set_key("24d27ef0e7757d581c5be99b90f064f0")
+        solver.set_key("8f05b2c530919c55206b1292e565b7ef")
         solver.set_soft_id(0)
 
         # Attempt to solve
