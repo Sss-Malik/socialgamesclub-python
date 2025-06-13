@@ -2,16 +2,14 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "gameroom"
-DEBUG = False
+DEBUG = True
 BACKEND_SIGNATURE = "GR"
 
 # — Login credentials (hard-coded for this backend) —
 LOGIN_URL = "https://agentserver1.gameroom777.com/admin/login"
 USERNAME  = "TestGR159"
 PASSWORD  = "TestGR1122@"
-CAPTCHA = True
-URL_CHANGE = False
-USER_MANAGEMENT_URL = None
+MAX_CAPTCHA_RETRIES = 5
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent

@@ -19,20 +19,40 @@ def _login_and_navigate(logger: logging.Logger):
         logger.info("Navigating to login page: %s", LOGIN_URL)
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
-        page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-        page.fill(LOGIN_ACCOUNT, USERNAME)
-        page.fill(LOGIN_PASSWORD, PASSWORD)
 
-        if CAPTCHA:
-            handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_INPUT, CAPTCHA_DIR)
+        for attempt in range(MAX_CAPTCHA_RETRIES):
+            page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
+            page.fill(LOGIN_ACCOUNT, USERNAME)
+            page.fill(LOGIN_PASSWORD, PASSWORD)
 
-        if DEBUG:
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+
+            if text == 0:
+                page.reload(wait_until="domcontentloaded")
+                continue
+
+            page.fill(CAPTCHA_INPUT, text)
+
+            if DEBUG:
+                input("DEBUG: Check complete CAPTCHA and press Enter...")
+
+            page.click(LOGIN_BUTTON)
+
             try:
-                input("DEBUG: Manually complete CAPTCHA and press Enter...")
-            except Exception:
-                logger.warning("DEBUG input skipped.")
+                captcha_status = page.wait_for_selector("div.layui-layer-content", timeout=3000)
+                text = captcha_status.inner_text()
+                if "incorrect" in text.lower():
+                    logger.warning("Captcha failed. Retrying...")
+                    solver.report_incorrect_image_captcha()
+                    page.reload(wait_until="domcontentloaded")
+                    continue
+                else:
+                    logger.info("No captcha incorrect message found. Assuming correct.")
+                    break
+            except PlaywrightTimeoutError:
+                logger.info("No captcha incorrect message found. Assuming correct.")
+                break
 
-        page.click(LOGIN_BUTTON)
         page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000, state="attached")
         logger.info("Login successful.")
 

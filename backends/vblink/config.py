@@ -9,8 +9,6 @@ BACKEND_SIGNATURE = "VB"
 LOGIN_URL = "https://gm.vblink777.club/#/login"
 USERNAME  = "TestVB159"
 PASSWORD  = "Test12345"
-CAPTCHA = False
-URL_CHANGE = True
 USER_MANAGEMENT_URL = "https://gm.vblink777.club/#/manage-user/account"
 
 # — Paths for this backend (relative to the project root) —
