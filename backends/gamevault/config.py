@@ -3,6 +3,8 @@ from pathlib import Path
 BACKEND_NAME = "gamevault"
 BACKEND_SIGNATURE = "GV"
 DEBUG = False
+MAX_CAPTCHA_RETRIES = 5
+
 
 LOGIN_URL = "https://agent.gamevault999.com/login"
 USERNAME  = "TestGV159"
@@ -33,4 +35,6 @@ CREATE_ACCOUNT = 'button:has-text("Save")'
 ACCOUNT_SUCCESS = ".el-dialog:has(#invoiceModel)"
 ACCOUNT_SUCCESS_MSG = ["successfully"]
 ERROR_EL = "div.el-message--error"
+
 ACCOUNT_SEARCH_INPUT = 'input[placeholder="Please enter your search content"]'
+

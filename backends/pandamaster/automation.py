@@ -27,21 +27,43 @@ def _login_and_navigate(logger: logging.Logger):
 
     try:
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-        page.fill(LOGIN_ACCOUNT, USERNAME)
-        page.fill(LOGIN_PASSWORD, PASSWORD)
 
-        if CAPTCHA:
+        for attempt in range(MAX_CAPTCHA_RETRIES):
+
+            page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
+
+
+            page.fill(LOGIN_ACCOUNT, USERNAME)
+            page.fill(LOGIN_PASSWORD, PASSWORD)
+
             logger.debug("Solving CAPTCHA.")
-            handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_INPUT, CAPTCHA_DIR)
-        if DEBUG:
-            input("DEBUG MODE: Enter CAPTCHA manually, then press Enter to continue...")
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
 
-        page.click(LOGIN_BUTTON)
+            if text == 0:
+                page.reload(wait_until="domcontentloaded")
+                continue
+
+
+            page.fill(CAPTCHA_INPUT, text)
+
+            if DEBUG:
+                input("DEBUG MODE: Check CAPTCHA manually, then press Enter to continue...")
+
+            page.click(LOGIN_BUTTON)
+            try:
+                captcha_status = page.wait_for_selector("div#mb_con", timeout=3000)
+                text = captcha_status.inner_text()
+                if "incorrect" in text.lower():
+                    logger.warning("Captcha failed. Retrying...")
+                    solver.report_incorrect_image_captcha()
+                    page.reload(wait_until="domcontentloaded")
+                    continue
+            except PlaywrightTimeoutError:
+                logger.info("No captcha incorrect message found. Assuming correct.")
+                break
+
+
         page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000)
-
-        if URL_CHANGE:
-            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
         left_iframe_el = page.query_selector(LEFT_IFRAME)
         if not left_iframe_el or not left_iframe_el.content_frame():

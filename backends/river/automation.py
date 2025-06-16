@@ -30,8 +30,8 @@ def _login_and_navigate(logger: logging.Logger):
         page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000, state="attached")
         logger.info("Login successful.")
 
-        if URL_CHANGE:
-            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+        page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
         return playwright, browser, context, page
 
