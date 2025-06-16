@@ -35,3 +35,6 @@ CREATE_ACCOUNT = 'button:has-text("Save")'
 ACCOUNT_SUCCESS = ".el-dialog:has(#invoiceModel)"
 ACCOUNT_SUCCESS_MSG = ["successfully"]
 ERROR_EL = "div.el-message--error"
+
+ACCOUNT_SEARCH_INPUT = 'input[placeholder="Please enter your search content"]'
+

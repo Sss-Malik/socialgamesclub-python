@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from backends.firekirin.config import *
 from backends.firekirin.utils.credentials import generate_credentials
+from backends.firekirin.utils.actions import click_update_for_account
 
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
@@ -138,6 +139,56 @@ def _create_single_account(page, logger: logging.Logger):
         logger.exception("Account creation error: %s", e)
 
 
+def _recharge_account(page, logger: logging.Logger, count: int, account_id):
+    try:
+        # Step 1: Wait for and access the main iframe
+        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=10000)
+        main_frame = main_iframe_el.content_frame() if main_iframe_el else None
+        if not main_frame:
+            raise Exception("Main iframe missing or inaccessible.")
+
+        # Step 2: Search for the account
+        main_frame.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=10000)
+        main_frame.fill(ACCOUNT_SEARCH_INPUT, account_id)
+        main_frame.click(ACCOUNT_SEARCH_BUTTON)
+        page.wait_for_timeout(5000)
+
+        click_update_for_account(main_frame, account_id, logger)
+
+        # Step 4: Click Recharge button
+        recharge_btn = main_frame.wait_for_selector("a:has-text('Recharge')", timeout=5000)
+        if not recharge_btn:
+            logger.error("❌ Could not find the Recharge button.")
+            return
+        recharge_btn.click()
+
+        # Step 5: Interact with the recharge iframe
+        recharge_iframe_el = page.wait_for_selector('iframe[src*="AccountManager"]', timeout=10000)
+        recharge_frame = recharge_iframe_el.content_frame() if recharge_iframe_el else None
+        if not recharge_frame:
+            raise Exception("Recharge iframe missing or inaccessible.")
+
+        recharge_frame.wait_for_selector("input#txtAddGold", timeout=5000)
+        recharge_frame.fill("input#txtAddGold", str(count))
+        recharge_frame.click('input[type="button"][value="Recharge"]')
+
+        # Step 6: Check for success message
+        try:
+            status_el = page.wait_for_selector("#mb_con", timeout=5000, state="visible")
+            message_text = status_el.inner_text().lower() if status_el else ""
+            if "successful" in message_text:
+                logger.info("✅ Account successfully recharged.")
+            elif "insufficient" in message_text:
+                logger.warning("Backend balance insufficient.")
+
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ Success dialog not detected.")
+
+    except PlaywrightTimeoutError as to_err:
+        logger.exception("⏳ Timeout during account topup: %s", to_err)
+    except Exception as e:
+        logger.exception("❌ Account topup error: %s", e)
+
 def action_create_account(count: int):
     """Main entry to create `count` number of accounts."""
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -157,6 +208,31 @@ def action_create_account(count: int):
         logger.exception("Error during account creation: %s", e)
     finally:
         logger.info("===== Create-account action completed. Closing browser. =====")
+        try:
+            if browser:
+                browser.close()
+                logger.debug("Browser closed.")
+            if playwright:
+                playwright.stop()
+                logger.debug("Playwright stopped.")
+        except Exception as close_exc:
+            logger.exception("Error while closing resources: %s", close_exc)
+
+def action_recharge_account(count: int, account_id):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
+
+    playwright = browser = context = page = None
+
+    try:
+        playwright, browser, context, page = _login_and_navigate(logger)
+        _recharge_account(page, logger, count, account_id)
+    except Exception as e:
+        logger.exception("Error during account creation: %s", e)
+    finally:
+        logger.info("===== topup-account action completed. Closing browser. =====")
         try:
             if browser:
                 browser.close()

@@ -4,6 +4,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from backends.river.config import *
 from backends.river.utils.credentials import generate_credentials
+from backends.river.utils.actions import click_purchase_for_account
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
@@ -98,3 +99,82 @@ def action_create_account(count: int):
             logger.debug("Browser and Playwright closed.")
         except Exception as e:
             logger.warning("Error closing browser/playwright: %s", e)
+
+
+
+def _recharge_account(page, logger: logging.Logger, count: int, account_id):
+    try:
+
+        page.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=15_000)
+        page.fill(ACCOUNT_SEARCH_INPUT, account_id)
+        page.click('button:has-text("Search")')
+
+        click_purchase_for_account(page, account_id, logger)
+        page.wait_for_timeout(2000)
+
+        deposit_modal = page.wait_for_selector("#modal-deposite", timeout=15000, state="visible")
+
+        # Fill the amount input
+        amount_input = deposit_modal.query_selector("input#modal-deposite-amount")
+        if amount_input:
+            amount_input.fill(str(count))
+            logger.info(f"✅ Filled deposit amount with: {count}")
+        else:
+            logger.error("❌ Amount input not found in deposit modal.")
+            return
+
+        input("🔍 Press Enter to continue (e.g., after verifying or adjusting inputs)...")
+
+        purchase_button = deposit_modal.query_selector("input.btn.btn-primary[type='submit'][value='Purchase']")
+        if purchase_button:
+            purchase_button.click()
+            logger.info("✅ Clicked Purchase button in modal.")
+        else:
+            logger.error("❌ Purchase button not found in modal.")
+
+        try:
+
+            error_alert = page.wait_for_selector(".alert.alert-error", timeout=5000, state="visible")
+            error_text = error_alert.inner_text().strip()
+            logger.error(f"❌ Purchase failed: {error_text}")
+
+            if "not enough credits in your balance" in error_text:
+                logger.info(f"Account purchase failed: {error_text}")
+            elif "success" in error_text:
+                logger.info(f"Purchase completed successfully:")
+
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ No purchase confirmation dialog appeared after confirming recharge.")
+        except Exception as e:
+            logger.exception(f"❌ Error verifying purchase success: {e}")
+
+    except PlaywrightTimeoutError as to_err:
+        logger.exception("⏳ Timeout during account topup: %s", to_err)
+    except Exception as e:
+        logger.exception("❌ Account topup error: %s", e)
+
+
+def action_recharge_account(count: int, account_id):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
+
+    playwright = browser = context = page = None
+
+    try:
+        playwright, browser, context, page = _login_and_navigate(logger)
+        _recharge_account(page, logger, count, account_id)
+    except Exception as e:
+        logger.exception("Error during account creation: %s", e)
+    finally:
+        logger.info("===== topup-account action completed. Closing browser. =====")
+        try:
+            if browser:
+                browser.close()
+                logger.debug("Browser closed.")
+            if playwright:
+                playwright.stop()
+                logger.debug("Playwright stopped.")
+        except Exception as close_exc:
+            logger.exception("Error while closing resources: %s", close_exc)

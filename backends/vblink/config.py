@@ -2,7 +2,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "vblink"
-DEBUG = True
+DEBUG = False
 BACKEND_SIGNATURE = "VB"
 
 # — Login credentials (hard-coded for this backend) —
@@ -32,3 +32,5 @@ ACCOUNT_PASSWORD = 'input[placeholder="Length must be 6-16 characters! Must incl
 CREATE_ACCOUNT = 'button:has-text("OK")'
 ACCOUNT_SUCCESS = '.el-message.el-message--success'
 ACCOUNT_SUCCESS_MSG = ["sucessful"]
+SEARCH_URL = "https://gm.vblink777.club/#/manage-user/search"
+ACCOUNT_SEARCH_INPUT = 'input[type="text"][placeholder="Please enter the account to be search here"]'

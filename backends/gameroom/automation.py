@@ -3,6 +3,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from backends.gameroom.config import *
 from backends.gameroom.utils.credentials import generate_credentials
+from backends.gameroom.utils.actions import click_recharge_for_account
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
@@ -69,6 +70,7 @@ def _login_and_navigate(logger: logging.Logger):
         playwright.stop()
         raise
 
+
 def _create_single_account(page, logger: logging.Logger):
     try:
         main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
@@ -108,7 +110,6 @@ def _create_single_account(page, logger: logging.Logger):
     except Exception as e:
         logger.exception("Account creation failed: %s", e)
 
-
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -137,8 +138,75 @@ def action_create_account(count: int):
             logger.warning("Error closing browser/playwright: %s", e)
 
 
-def action_account_topup(count: int):
-    """
-    Stub for future implementation.
-    """
-    pass
+
+def _recharge_account(page, logger: logging.Logger, count: int, account_id):
+    try:
+
+        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
+        if not main_iframe_el or not main_iframe_el.content_frame():
+            raise Exception("Main iframe missing or inaccessible.")
+        main_frame = main_iframe_el.content_frame()
+
+        main_frame.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=10000)
+        main_frame.fill(ACCOUNT_SEARCH_INPUT, account_id)
+
+        main_frame.click("button:has-text('Search')")
+
+        click_recharge_for_account(main_frame, account_id, logger)
+
+        recharge_iframe_el = main_frame.wait_for_selector('iframe[src*="recharge"]', timeout=10000)
+        recharge_frame = recharge_iframe_el.content_frame() if recharge_iframe_el else None
+        if not recharge_frame:
+            raise Exception("Recharge iframe missing or inaccessible.")
+
+        recharge_frame.fill('input[name="balance"]', str(count))
+
+        input("enter")
+
+        recharge_frame.click("button:has-text('Submit')")
+
+        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
+        if not main_iframe_el or not main_iframe_el.content_frame():
+            raise Exception("Main iframe missing or inaccessible.")
+        main_frame = main_iframe_el.content_frame()
+
+        try:
+            el = main_frame.wait_for_selector(ACCOUNT_RECHARGE_SUCCESS, timeout=5000)
+            text = el.inner_text().lower()
+            if any(phrase in text for phrase in ACCOUNT_RECHARGE_SUCCESS_MSG):
+                logger.info("✅ Account deposit successfully.")
+                main_frame.click(ACCOUNT_SUCCESS_CLOSE)
+            else:
+                logger.warning("⚠️ Unexpected success message: %s", text)
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ No success message after deposit account.")
+
+    except PlaywrightTimeoutError as to_err:
+        logger.exception("⏳ Timeout during account topup: %s", to_err)
+    except Exception as e:
+        logger.exception("❌ Account topup error: %s", e)
+
+def action_recharge_account(count: int, account_id):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
+
+    playwright = browser = context = page = None
+
+    try:
+        playwright, browser, context, page = _login_and_navigate(logger)
+        _recharge_account(page, logger, count, account_id)
+    except Exception as e:
+        logger.exception("Error during account creation: %s", e)
+    finally:
+        logger.info("===== topup-account action completed. Closing browser. =====")
+        try:
+            if browser:
+                browser.close()
+                logger.debug("Browser closed.")
+            if playwright:
+                playwright.stop()
+                logger.debug("Playwright stopped.")
+        except Exception as close_exc:
+            logger.exception("Error while closing resources: %s", close_exc)

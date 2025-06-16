@@ -2,13 +2,17 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "juwa"
-DEBUG = True
+DEBUG = False
 BACKEND_SIGNATURE = "JW"
 
 # — Login credentials (hard-coded for this backend) —
 LOGIN_URL = "https://ht.juwa777.com/login"
 USERNAME  = "TestJW159"
 PASSWORD  = "Test1234"
+
+CAPTCHA = True
+URL_CHANGE = True
+
 USER_MANAGEMENT_URL = "https://ht.juwa777.com/userManagement"
 MAX_CAPTCHA_RETRIES = 5
 
@@ -35,3 +39,4 @@ CONFIRM_PASSWORD = '//label[text()="Confirm password"]/following-sibling::div//i
 CREATE_ACCOUNT = 'button:has-text("Save")'
 ACCOUNT_SUCCESS = '.el-message--success .el-message__content'
 ACCOUNT_SUCCESS_MSG = ["success"]
+ACCOUNT_SEARCH_INPUT = 'input[placeholder="Please enter your search content"]'
