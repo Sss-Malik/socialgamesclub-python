@@ -12,9 +12,7 @@ BACKEND_SIGNATURE = "OS"
 LOGIN_URL = "https://orionstars.vip:8781/default.aspx"
 USERNAME  = "TestOS159"
 PASSWORD  = "Test@159872!!"
-CAPTCHA = False
-URL_CHANGE = False
-USER_MANAGEMENT_URL = None
+MAX_CAPTCHA_RETRIES = 5
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent

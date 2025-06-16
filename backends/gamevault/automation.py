@@ -47,16 +47,38 @@ def _login_and_navigate(logger: logging.Logger):
         logger.info("Navigating to login page: %s", LOGIN_URL)
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
-        page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-        page.fill(LOGIN_ACCOUNT, USERNAME)
-        page.fill(LOGIN_PASSWORD, PASSWORD)
+        for attempt in range(MAX_CAPTCHA_RETRIES):
+            page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
+            page.fill(LOGIN_ACCOUNT, USERNAME)
+            page.fill(LOGIN_PASSWORD, PASSWORD)
 
-        if CAPTCHA:
-            handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_INPUT, CAPTCHA_DIR)
-        if DEBUG:
-            input("DEBUG: Manually complete CAPTCHA and press Enter...")
 
-        page.click(LOGIN_BUTTON)
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+
+            if text and text == 0:
+                page.reload(wait_until="domcontentloaded")
+                continue
+
+            page.fill(CAPTCHA_INPUT, text)
+
+            if DEBUG:
+                input("DEBUG: Manually complete CAPTCHA and press Enter...")
+
+            page.click(LOGIN_BUTTON)
+
+            try:
+                captcha_status = page.wait_for_selector("p.el-message__content", timeout=3000)
+                text = captcha_status.inner_text()
+                if "incorrect" in text.lower():
+                    logger.warning("Captcha failed. Retrying...")
+                    solver.report_incorrect_image_captcha()
+                    page.reload(wait_until="domcontentloaded")
+                    continue
+            except PlaywrightTimeoutError:
+                logger.info("No captcha incorrect message found. Assuming correct.")
+                break
+
+
         page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000)
         logger.info("Login successful.")
 

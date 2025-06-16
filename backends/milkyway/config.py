@@ -10,9 +10,7 @@ BACKEND_SIGNATURE = "MW"
 LOGIN_URL = "https://milkywayapp.xyz:8781/default.aspx"
 USERNAME  = "TestMW159"
 PASSWORD  = "Test_159872"
-CAPTCHA = True
-URL_CHANGE = False
-USER_MANAGEMENT_URL = None
+MAX_CAPTCHA_RETRIES = 5
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent

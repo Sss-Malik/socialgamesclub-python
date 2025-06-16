@@ -4,7 +4,7 @@ from anticaptchaofficial.imagecaptcha import *
 
 import logging
 
-def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeout: int = 10000) -> str | int:
+def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeout: int = 10000):
     try:
         ts = int(time.time())
         img_path = save_dir / f"captcha_raw_{ts}.png"
@@ -15,17 +15,22 @@ def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeou
 
         # Initialize solver
         solver = imagecaptcha()
-        solver.set_verbose(1)
-        solver.set_key("8f05b2c530919c55206b1292e565b7ef")
-        solver.set_soft_id(0)
 
-        # Attempt to solve
+        solver.set_key("8f05b2c530919c55206b1292e565b7ef")
+
+        solver.set_numeric(1)
+
+
+        # Solve CAPTCHA
         captcha_text = solver.solve_and_return_solution(str(img_path))
 
         if captcha_text == 0:
             logger.error("Captcha solver failed to return a valid solution.")
-        return captcha_text
+
+        # Return both solution and solver object
+        return captcha_text, solver
 
     except Exception as e:
         logger.exception(f"Exception occurred while solving captcha: {e}")
-        return 0
+        return 0, None
+

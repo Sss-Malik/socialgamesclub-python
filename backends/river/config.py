@@ -10,7 +10,6 @@ LOGIN_URL = "https://river-pay.com/office/login"
 USERNAME  = "TestRS159"
 PASSWORD  = "TestRS1122"
 CAPTCHA = False
-URL_CHANGE = True
 USER_MANAGEMENT_URL = "https://river-pay.com/cashier/create"
 
 # — Paths for this backend (relative to the project root) —

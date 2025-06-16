@@ -9,8 +9,6 @@ BACKEND_SIGNATURE = "PM"
 LOGIN_URL = "https://ht.ultrapanda.mobi/#/login"
 USERNAME  = "TestUP159"
 PASSWORD  = "Test1234"
-CAPTCHA = False
-URL_CHANGE = True
 USER_MANAGEMENT_URL = "https://ht.ultrapanda.mobi/#/manage-user/account"
 
 # — Paths for this backend (relative to the project root) —
