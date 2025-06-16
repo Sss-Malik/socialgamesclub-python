@@ -41,3 +41,6 @@ CREATE_ACCOUNT = 'button:has-text("Submit")'
 ACCOUNT_SUCCESS = 'div.layui-layer-content >> text=ACCOUNT:'
 ACCOUNT_SUCCESS_MSG = ["account:"]
 ACCOUNT_SUCCESS_CLOSE = 'a:has-text("Close")'
+ACCOUNT_SEARCH_INPUT = 'input[name="account"]'
+ACCOUNT_RECHARGE_SUCCESS = 'div.layui-layer-content >> text=DEPOSIT:'
+ACCOUNT_RECHARGE_SUCCESS_MSG = ["deposit:"]

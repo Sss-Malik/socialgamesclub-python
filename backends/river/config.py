@@ -36,3 +36,4 @@ ACCOUNT_PASSWORD = 'input[placeholder="Length must be 6-16 characters! Must incl
 CREATE_ACCOUNT = 'input[type="submit"][value="Create account"]'
 ACCOUNT_SUCCESS = '.alert.alert-success'
 ACCOUNT_SUCCESS_MSG = ["successfully created", "account", "amount",]
+ACCOUNT_SEARCH_INPUT = 'input[name="search"]'

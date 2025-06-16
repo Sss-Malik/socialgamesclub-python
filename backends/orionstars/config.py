@@ -5,14 +5,14 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "orionstars"
-DEBUG = True
+DEBUG = False
 BACKEND_SIGNATURE = "OS"
 
 # — Login credentials (hard-coded for this backend) —
 LOGIN_URL = "https://orionstars.vip:8781/default.aspx"
 USERNAME  = "TestOS159"
 PASSWORD  = "Test@159872!!"
-CAPTCHA = False
+CAPTCHA = True
 URL_CHANGE = False
 USER_MANAGEMENT_URL = None
 
@@ -43,3 +43,5 @@ CONFIRM_PASSWORD = "#txtLogonPass2"
 CREATE_ACCOUNT = "xpath=//a[contains(@class,'btn13') and contains(text(),'Create Player')]"
 ACCOUNT_SUCCESS = '.el-message.el-message--success'
 ACCOUNT_SUCCESS_MSG = ["added successfully", "success", "created"]
+ACCOUNT_SEARCH_INPUT = 'input[name="txtSearch"]'
+ACCOUNT_SEARCH_BUTTON = "a:has-text('Search')"
