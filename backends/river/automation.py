@@ -133,18 +133,33 @@ def _recharge_account(page, logger: logging.Logger, count: int, account_id):
             logger.error("❌ Purchase button not found in modal.")
 
         try:
+            # Try to wait for either alert (error or success)
+            error_alert = None
+            success_alert = None
 
-            error_alert = page.wait_for_selector(".alert.alert-error", timeout=5000, state="visible")
-            error_text = error_alert.inner_text().strip()
-            logger.error(f"❌ Purchase failed: {error_text}")
+            try:
+                error_alert = page.wait_for_selector(".alert.alert-error", timeout=3000, state="visible")
+            except PlaywrightTimeoutError:
+                pass  # No error alert appeared
 
-            if "not enough credits in your balance" in error_text:
-                logger.info(f"Account purchase failed: {error_text}")
-            elif "success" in error_text:
-                logger.info(f"Purchase completed successfully:")
+            try:
+                success_alert = page.wait_for_selector(".alert.alert-success", timeout=3000, state="visible")
+            except PlaywrightTimeoutError:
+                pass  # No success alert appeared
 
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No purchase confirmation dialog appeared after confirming recharge.")
+            if error_alert:
+                error_text = error_alert.inner_text().strip().lower()
+                logger.error(f"❌ Purchase failed: {error_text}")
+
+                if "not enough credits in your balance" in error_text:
+                    logger.info(f"Account purchase failed due to insufficient credits.")
+            elif success_alert:
+                success_text = success_alert.inner_text().strip().lower()
+                if "amount added" in success_text:
+                    logger.info(f"✅ Purchase completed successfully: {success_text}")
+            else:
+                logger.warning("⚠️ No success or error message appeared after confirming recharge.")
+
         except Exception as e:
             logger.exception(f"❌ Error verifying purchase success: {e}")
 
