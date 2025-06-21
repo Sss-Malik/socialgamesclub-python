@@ -2,7 +2,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "juwa"
-DEBUG = False
+DEBUG = True
 BACKEND_SIGNATURE = "JW"
 
 # — Login credentials (hard-coded for this backend) —

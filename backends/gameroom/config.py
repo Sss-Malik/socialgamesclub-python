@@ -36,9 +36,7 @@ ACCOUNT_BALANCE = 'input[name="money"]'
 ACCOUNT_PASSWORD = 'input#password[name="password"]'
 CONFIRM_PASSWORD = 'input[name="password_confirmation"]'
 CREATE_ACCOUNT = 'button:has-text("Submit")'
-ACCOUNT_SUCCESS = 'div.layui-layer-content >> text=ACCOUNT:'
-ACCOUNT_SUCCESS_MSG = ["account:"]
+ACCOUNT_SUCCESS = "div.layui-layer.layui-layer-dialog"
 ACCOUNT_SUCCESS_CLOSE = 'a:has-text("Close")'
 ACCOUNT_SEARCH_INPUT = 'input[name="account"]'
-ACCOUNT_RECHARGE_SUCCESS = 'div.layui-layer-content >> text=DEPOSIT:'
-ACCOUNT_RECHARGE_SUCCESS_MSG = ["deposit:"]
+ACCOUNT_RECHARGE_SUCCESS = "div.layui-layer.layui-layer-dialog"
