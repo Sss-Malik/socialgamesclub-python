@@ -1,50 +1,42 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-import time
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
-def click_recharge_for_account(page, account_id, logger):
+def click_recharge_for_account(page: Page, account_id: str, logger):
+    logger.debug(f"Searching for recharge button for Username: {account_id}")
+
+    # 1. Wait for at least one row to appear in the table body
     try:
-        # Wait manually for up to 10s for rows to appear
-        max_wait = 10
-        found = False
-        for _ in range(max_wait):
-            rows = page.query_selector_all("table.el-table__body tr")
-            if rows:
-                found = True
-                break
-            time.sleep(1)
-
-        if not found:
-            logger.warning("⚠️ No table rows found within timeout.")
-            return
-
-        for row in rows:
-            cells = row.query_selector_all("td")
-            if len(cells) < 12:
-                continue
-
-            # Username is in 4th column (index 3)
-            username_cell = cells[3].query_selector(".cell")
-            if not username_cell:
-                continue
-
-            username = username_cell.inner_text().strip()
-            if username == account_id:
-                # Click the editor button in the first cell
-                editor_btn = cells[0].query_selector("button:has-text('editor')")
-                if editor_btn:
-                    editor_btn.click()
-                    recharge_btn = page.wait_for_selector("button:has-text('Recharge')", timeout=5000, state="visible")
-                    if recharge_btn:
-                        recharge_btn.click()
-                    logger.info(f"✅ Clicked recharge button for Username: {account_id}")
-                    return
-
-                logger.error(f"❌ No editor button found for Username: {account_id}")
-                return
-
-        logger.warning(f"⚠️ No row matched Username: {account_id}")
-
+        page.locator("table.el-table__body tr").first.wait_for(timeout=10_000)
     except PlaywrightTimeoutError:
-        logger.exception("⏳ Timeout while trying to click recharge.")
-    except Exception as e:
-        logger.exception(f"❌ Error clicking recharge for Username {account_id}: {e}")
+        logger.warning("⚠️ No table rows found within timeout.")
+        raise Exception("<UNK> No table rows found within timeout.")
+
+    # 2. Find the specific <tr> whose 4th <td> .cell text matches account_id
+    row = page.locator(
+        "table.el-table__body tr",
+        has=page.locator("td:nth-child(4) .cell", has_text=account_id)
+    ).first
+
+    try:
+        row.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        logger.warning(f"⚠️ No row matched Username: {account_id}")
+        raise Exception(f"<UNK> No row matched Username: {account_id}")
+
+    # 3. Within that row, find and click the "editor" button in the first cell
+    editor_btn = row.locator("td:nth-child(1) button", has_text="editor")
+    try:
+        editor_btn.wait_for(timeout=5_000)
+        editor_btn.click()
+    except PlaywrightTimeoutError:
+        logger.error(f"❌ No editor button found for Username: {account_id}")
+        raise Exception(f"<UNK> No editor button found for Username: {account_id}")
+
+    # 4. Wait for the global "Recharge" button to appear and click it
+    try:
+        recharge_btn = page.locator("button", has_text="Recharge")
+        recharge_btn.wait_for(timeout=5_000, state="visible")
+        recharge_btn.click()
+    except PlaywrightTimeoutError:
+        raise Exception("❌ Timeout while waiting for the Recharge button.")
+
+    logger.info(f"✅ Clicked recharge button for Username: {account_id}")

@@ -1,6 +1,6 @@
+# automation_river.py
 import logging
-
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from backends.river.config import *
 from backends.river.utils.credentials import generate_credentials
@@ -11,170 +11,149 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 
 
-def _login_and_navigate(logger: logging.Logger):
-    logger.info("Launching browser via Playwright (headed mode)...")
-    playwright = sync_playwright().start()
+def _login_and_navigate(page: Page, logger: logging.Logger):
+    logger.info("🚀 Navigating to login page: %s", LOGIN_URL)
+    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+
+    page.locator(LOGIN_ACCOUNT).fill(USERNAME)
+    page.locator(LOGIN_PASSWORD).fill(PASSWORD)
+    page.locator(LOGIN_BUTTON).click()
+
+    page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=20_000)
+    logger.info("✅ Login successful.")
+
+    page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+
+def _create_single_account(page: Page, logger: logging.Logger):
+    # open the “create account” form
+    page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=15_000)
+
+    # generate creds
+    account_id, password = generate_credentials()
+    logger.info("🔑 Generated credentials: %s / [REDACTED]", account_id)
+
+    # fill & submit
+    page.locator(ACCOUNT_ID).fill(account_id)
+    page.locator(ACCOUNT_BALANCE).fill("0")
+    page.locator(CREATE_ACCOUNT).click()
+
+    # wait for feedback
+    try:
+        alert = page.locator(ACCOUNT_SUCCESS).first
+        alert.wait_for(state="visible", timeout=3_000)
+        text = alert.inner_text().strip().lower()
+        if "successfully created" in text:
+            logger.info("✅ Account created successfully.")
+            save_credentials(account_id, password, logger, DATA_DIR)
+        else:
+            logger.warning("⚠️ Unexpected success message: %r", text)
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No success message after creating account.")
+
+
+def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    # search for user
+    acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
+    acc_sr.wait_for(timeout=15_000)
+    acc_sr.fill(account_id)
+    page.locator('button:has-text("Search")').click()
+
+    # delegate to existing helper
+    click_purchase_for_account(page, account_id, logger)
+    page.wait_for_timeout(2_000)
+
+    # wait for & fill deposit modal
+    modal = page.locator("#modal-deposite")
+    modal.wait_for(state="visible", timeout=15_000)
+    amt_input = modal.locator("input#modal-deposite-amount")
+    amt_input.wait_for(timeout=5_000)
+    amt_input.fill(str(count))
+    logger.info("✅ Filled deposit amount with: %d", count)
+
+    # debug pause
+    input("🔍 Press Enter to continue (e.g., after verifying inputs)…")
+
+    # click Purchase
+    modal.locator("input.btn.btn-primary[type='submit'][value='Purchase']").click()
+    logger.info("✅ Clicked Purchase button in modal.")
 
     try:
-        browser = playwright.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        logger.info("Navigating to login page: %s", LOGIN_URL)
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+    except:
+        pass
 
-        page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-        page.fill(LOGIN_ACCOUNT, USERNAME)
-        page.fill(LOGIN_PASSWORD, PASSWORD)
+    alert = page.wait_for_selector(
+        "div.alert.alert-error, div.alert.alert-success",
+        timeout=15_000,
+        state="visible"
+    )
 
-        page.click(LOGIN_BUTTON)
-        page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000, state="attached")
-        logger.info("Login successful.")
+    text = alert.inner_text().strip().lower()
 
+    # 3) Branch on which one it is
+    if alert.get_attribute("class").split().count("alert-error"):
+        logger.error("❌ Purchase failed: %s", text)
+        if "not enough credits" in text:
+            logger.info("⚠️ Account has insufficient credits.")
+    elif alert.get_attribute("class").split().count("alert-success"):
+        if "amount added" in text:
+            logger.info("✅ Purchase completed successfully: %s", text)
+        else:
+            logger.info("ℹ️ Purchase succeeded with message: %s", text)
+    else:
+        # in the extremely unlikely event it matched neither class…
+        logger.warning("⚠️ Matched an alert, but unknown type: %s", text)
 
-        page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-
-        return playwright, browser, context, page
-
-    except Exception as e:
-        logger.exception("Login error: %s", e)
-        try: browser.close()
-        except: pass
-        playwright.stop()
-        raise
-
-
-def _create_single_account(page, logger: logging.Logger):
-    try:
-        page.wait_for_selector(CREATE_ACCOUNT_INIT, timeout=15_000)
-
-        account_id, password = generate_credentials()
-        logger.info("Generated credentials: %s / [REDACTED]", account_id)
-
-        page.fill(ACCOUNT_ID, account_id)
-        page.fill(ACCOUNT_BALANCE, "0")
-        page.click(CREATE_ACCOUNT)
-
-        try:
-            # Wait for the success alert to be attached and visible
-            message = page.wait_for_selector(ACCOUNT_SUCCESS, timeout=3000, state="visible")
-
-            message_text = " ".join(message.inner_text().lower().split())
-            if any(phrase in message_text for phrase in ACCOUNT_SUCCESS_MSG):
-                logger.info("✅ Account created successfully")
-                save_credentials(account_id, password, logger, DATA_DIR)
-            else:
-                logger.warning("⚠️ Unexpected success message: %s", message_text)
-
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No success message after creating account.")
-    except Exception as e:
-        logger.exception("Account creation failed: %s", e)
 
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("==== Starting account creation (%d accounts) ====", count)
 
-    playwright = browser = context = page = None
-
     try:
-        playwright, browser, context, page = _login_and_navigate(logger)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
 
-        for i in range(count):
-            logger.info("Creating account #%d of %d", i + 1, count)
-            _create_single_account(page, logger)
-            try:
-                page.reload(wait_until="domcontentloaded")
-            except Exception as e:
-                logger.warning("Failed to reload User Management page: %s", e)
+            _login_and_navigate(page, logger)
+            for i in range(count):
+                logger.info("➡️ Creating account #%d of %d", i+1, count)
+                try:
+                    _create_single_account(page, logger)
+                except Exception as e:
+                    logger.exception("❌ Error creating account #%d: %s", i+1, e)
 
+                # reload back to management page
+                try:
+                    page.reload(wait_until="domcontentloaded")
+                except Exception as e:
+                    logger.warning("⚠️ Failed to reload page: %s", e)
+
+            browser.close()
     except Exception as e:
-        logger.exception("Fatal error in account creation loop: %s", e)
+        logger.exception("🔥 Fatal error in account creation: %s", e)
     finally:
         logger.info("==== Finished account creation ====")
-        # Uncomment to auto-close browser
-        try:
-            browser.close()
-            playwright.stop()
-            logger.debug("Browser and Playwright closed.")
-        except Exception as e:
-            logger.warning("Error closing browser/playwright: %s", e)
 
 
-
-def _recharge_account(page, logger: logging.Logger, count: int, account_id):
-    try:
-
-        page.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=15_000)
-        page.fill(ACCOUNT_SEARCH_INPUT, account_id)
-        page.click('button:has-text("Search")')
-
-        click_purchase_for_account(page, account_id, logger)
-        page.wait_for_timeout(2000)
-
-        deposit_modal = page.wait_for_selector("#modal-deposite", timeout=15000, state="visible")
-
-        # Fill the amount input
-        amount_input = deposit_modal.query_selector("input#modal-deposite-amount")
-        if amount_input:
-            amount_input.fill(str(count))
-            logger.info(f"✅ Filled deposit amount with: {count}")
-        else:
-            logger.error("❌ Amount input not found in deposit modal.")
-            return
-
-        input("🔍 Press Enter to continue (e.g., after verifying or adjusting inputs)...")
-
-        purchase_button = deposit_modal.query_selector("input.btn.btn-primary[type='submit'][value='Purchase']")
-        if purchase_button:
-            purchase_button.click()
-            logger.info("✅ Clicked Purchase button in modal.")
-        else:
-            logger.error("❌ Purchase button not found in modal.")
-
-        try:
-
-            error_alert = page.wait_for_selector(".alert.alert-error", timeout=5000, state="visible")
-            error_text = error_alert.inner_text().strip()
-            logger.error(f"❌ Purchase failed: {error_text}")
-
-            if "not enough credits in your balance" in error_text:
-                logger.info(f"Account purchase failed: {error_text}")
-            elif "success" in error_text:
-                logger.info(f"Purchase completed successfully:")
-
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No purchase confirmation dialog appeared after confirming recharge.")
-        except Exception as e:
-            logger.exception(f"❌ Error verifying purchase success: {e}")
-
-    except PlaywrightTimeoutError as to_err:
-        logger.exception("⏳ Timeout during account topup: %s", to_err)
-    except Exception as e:
-        logger.exception("❌ Account topup error: %s", e)
-
-
-def action_recharge_account(count: int, account_id):
+def action_recharge_account(count: int, account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
-
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
-
-    playwright = browser = context = page = None
+    logger.info("===== Starting topup: account_id=%s | count=%d =====", account_id, count)
 
     try:
-        playwright, browser, context, page = _login_and_navigate(logger)
-        _recharge_account(page, logger, count, account_id)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _recharge_account(page, logger, count, account_id)
+
+            browser.close()
     except Exception as e:
-        logger.exception("Error during account creation: %s", e)
+        logger.exception("🔥 Error during recharge process: %s", e)
     finally:
-        logger.info("===== topup-account action completed. Closing browser. =====")
-        try:
-            if browser:
-                browser.close()
-                logger.debug("Browser closed.")
-            if playwright:
-                playwright.stop()
-                logger.debug("Playwright stopped.")
-        except Exception as close_exc:
-            logger.exception("Error while closing resources: %s", close_exc)
+        logger.info("===== Topup process finished =====")

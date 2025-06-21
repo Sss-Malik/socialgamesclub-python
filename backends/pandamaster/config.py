@@ -3,7 +3,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "pandamaster"
-DEBUG = False
+DEBUG = True
 BACKEND_SIGNATURE = "PM"
 
 # — Login credentials (hard-coded for this backend) —
@@ -44,6 +44,5 @@ ACCOUNT_PASSWORD = "#txtLogonPass"
 CONFIRM_PASSWORD = "#txtLogonPass2"
 CREATE_ACCOUNT = "xpath=//a[contains(@class,'btn13') and contains(text(),'Create Player')]"
 ACCOUNT_SUCCESS = '.el-message.el-message--success'
-ACCOUNT_SUCCESS_MSG = ["added successfully", "success", "created"]
 ACCOUNT_SEARCH_INPUT = 'input[name="txtSearch"]'
 ACCOUNT_SEARCH_BUTTON = "a:has-text('Search')"
