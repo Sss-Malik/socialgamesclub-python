@@ -1,5 +1,6 @@
+# automation_gameroom.py
 import logging
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from backends.gameroom.config import *
 from backends.gameroom.utils.credentials import generate_credentials
@@ -10,203 +11,172 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
 
-def _login_and_navigate(logger: logging.Logger):
-    logger.info("Launching browser via Playwright (headed mode)...")
-    playwright = sync_playwright().start()
-    try:
-        browser = playwright.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        logger.info("Navigating to login page: %s", LOGIN_URL)
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
+def _login_and_navigate(page: Page, logger: logging.Logger):
+    logger.info("🚀 Launching and navigating to %s", LOGIN_URL)
+    page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
-        for attempt in range(MAX_CAPTCHA_RETRIES):
-            page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-            page.fill(LOGIN_ACCOUNT, USERNAME)
-            page.fill(LOGIN_PASSWORD, PASSWORD)
+    acct = page.locator(LOGIN_ACCOUNT)
+    pwd  = page.locator(LOGIN_PASSWORD)
+    cap_in = page.locator(CAPTCHA_INPUT)
+    btn   = page.locator(LOGIN_BUTTON)
 
-            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+    for attempt in range(MAX_CAPTCHA_RETRIES):
+        logger.debug(f"Login attempt #{attempt+1}")
+        acct.fill(USERNAME)
+        pwd.fill(PASSWORD)
 
-            if text == 0:
-                page.reload(wait_until="domcontentloaded")
-                continue
+        logger.debug("Solving CAPTCHA…")
+        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        if not text or text == 0:
+            page.reload(wait_until="domcontentloaded")
+            continue
 
-            page.fill(CAPTCHA_INPUT, text)
+        cap_in.fill(text)
+        if DEBUG:
+            input("DEBUG: verify CAPTCHA on screen, then press Enter…")
 
-            if DEBUG:
-                input("DEBUG: Check complete CAPTCHA and press Enter...")
-
-            page.click(LOGIN_BUTTON)
-
-            try:
-                captcha_status = page.wait_for_selector("div.layui-layer-content", timeout=3000)
-                text = captcha_status.inner_text()
-                if "incorrect" in text.lower():
-                    logger.warning("Captcha failed. Retrying...")
-                    solver.report_incorrect_image_captcha()
-                    page.reload(wait_until="domcontentloaded")
-                    continue
-                else:
-                    logger.info("No captcha incorrect message found. Assuming correct.")
-                    break
-            except PlaywrightTimeoutError:
-                logger.info("No captcha incorrect message found. Assuming correct.")
-                break
-
-        page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000, state="attached")
-        logger.info("Login successful.")
-
-        page.click('a:has-text("Game User")')
-
-        page.wait_for_selector(USER_MANAGEMENT_EL, timeout=5000, state="visible").click()
-
-        return playwright, browser, context, page
-
-    except Exception as e:
-        logger.exception("Login error: %s", e)
-        try: browser.close()
-        except: pass
-        playwright.stop()
-        raise
-
-
-def _create_single_account(page, logger: logging.Logger):
-    try:
-        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
-        if not main_iframe_el or not main_iframe_el.content_frame():
-            raise Exception("Main iframe missing or inaccessible.")
-        main_frame = main_iframe_el.content_frame()
-
-        main_frame.wait_for_selector(CREATE_ACCOUNT_INIT, timeout=15_000, state="visible").click()
-
-        dialog_iframe_el = main_frame.wait_for_selector(DIALOG_IFRAME, timeout=15_000)
-        if not dialog_iframe_el or not dialog_iframe_el.content_frame():
-            raise Exception("Dialog iframe missing or inaccessible.")
-        dialog_iframe = dialog_iframe_el.content_frame()
-
-        dialog_iframe.wait_for_selector(ACCOUNT_ID, timeout=10_000)
-
-        account_id, password = generate_credentials()
-        logger.info("Generated credentials: %s / [REDACTED]", account_id)
-
-        dialog_iframe.fill(ACCOUNT_ID, account_id)
-        dialog_iframe.fill(ACCOUNT_BALANCE, "0")
-        dialog_iframe.fill(ACCOUNT_PASSWORD, password)
-        dialog_iframe.fill(CONFIRM_PASSWORD, password)
-        dialog_iframe.click(CREATE_ACCOUNT)
+        btn.click()
 
         try:
-            el = main_frame.wait_for_selector(ACCOUNT_SUCCESS, timeout=5000)
-            text = el.inner_text().lower()
-            if any(phrase in text for phrase in ACCOUNT_SUCCESS_MSG):
+            # look for “incorrect” banner
+            page.locator("div.layui-layer-content", has_text="incorrect").wait_for(timeout=3_000)
+            logger.warning("❗ CAPTCHA incorrect, retrying…")
+            solver.report_incorrect_image_captcha()
+            page.reload(wait_until="domcontentloaded")
+        except PlaywrightTimeoutError:
+            logger.info("CAPTCHA accepted.")
+            break
+
+    # main‐page loaded
+    page.locator(MAIN_PAGE_EL).wait_for(state="attached", timeout=20_000)
+    logger.info("✅ Logged in successfully.")
+
+    game_user = page.locator('a', has_text="Game User")
+    game_user.wait_for(state="visible", timeout=20_000)
+    game_user.click()
+
+    user_mgmt = page.locator(USER_MANAGEMENT_EL)
+    user_mgmt.wait_for(state="visible", timeout=5_000)
+    user_mgmt.click()
+
+
+def _create_single_account(page: Page, logger: logging.Logger):
+    main_iframe = page.frame_locator(MAIN_IFRAME)
+    main_iframe.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
+
+    dialog_iframe = main_iframe.frame_locator(DIALOG_IFRAME)
+    dialog_iframe.locator(ACCOUNT_ID).wait_for(timeout=10_000)
+
+    while True:
+        account_id, password = generate_credentials()
+        logger.info("🔑 Generated credentials: %s / [REDACTED]", account_id)
+
+        dialog_iframe.locator(ACCOUNT_ID).fill(account_id)
+        dialog_iframe.locator(ACCOUNT_BALANCE).fill("0")
+        dialog_iframe.locator(ACCOUNT_PASSWORD).fill(password)
+        dialog_iframe.locator(CONFIRM_PASSWORD).fill(password)
+        dialog_iframe.locator(CREATE_ACCOUNT).click()
+
+        try:
+            # wait for the post‐submit message
+            msg = dialog_iframe.locator(ACCOUNT_SUCCESS)
+            msg.wait_for(state="visible", timeout=10_000)
+            text = msg.inner_text().strip().lower()
+
+            if "username already exists" in text:
+                logger.info("🔁 Username exists, retrying…")
+                continue
+            elif "successful" in text:
                 logger.info("✅ Account created successfully.")
                 save_credentials(account_id, password, logger, DATA_DIR)
-                main_frame.click(ACCOUNT_SUCCESS_CLOSE)
+                page.wait_for_timeout(1_000)
+                main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
+                break
             else:
-                logger.warning("⚠️ Unexpected success message: %s", text)
+                logger.warning("⚠️ Unexpected response: %r", text)
+                break
+
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ No success message after creating account.")
-    except Exception as e:
-        logger.exception("Account creation failed: %s", e)
+            logger.warning("⚠️ No success message after submit, moving on.")
+            break
+
+
+def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    # locate main iframe once
+    main_iframe = page.frame_locator(MAIN_IFRAME)
+
+    # search
+    main_iframe.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main_iframe.locator("button:has-text('Search')").click()
+
+    # call your existing helper (which still expects a Frame object)
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame_obj = frame_el.content_frame()
+    click_recharge_for_account(frame_obj, account_id, logger)
+
+    # fill & submit recharge form
+    recharge_iframe = main_iframe.frame_locator('iframe[src*="recharge"]')
+    recharge_iframe.locator('input[name="balance"]').fill(str(count))
+    if DEBUG:
+        input("DEBUG: review recharge form, then press Enter…")
+    recharge_iframe.locator("button:has-text('Submit')").click()
+
+    # wait for confirmation
+    try:
+        result = recharge_iframe.locator(ACCOUNT_RECHARGE_SUCCESS)
+        result.wait_for(timeout=5_000)
+        text = result.inner_text().lower()
+        if "successful" in text:
+            logger.info("✅ Account deposit successful.")
+            main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
+        elif "recharge balance is greater than available balance" in text:
+            logger.info("Account recharge balance is greater than available balance.")
+        else:
+            logger.warning("⚠️ Unexpected recharge message: %r", text)
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No recharge confirmation dialog appeared.")
+
 
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("==== Starting account creation (%d accounts) ====", count)
+    logger.info("🏷️  Starting create‐account action: count=%d", count)
 
-    playwright = browser = context = page = None
     try:
-        playwright, browser, context, page = _login_and_navigate(logger)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
 
-        for i in range(count):
-            logger.info("Creating account #%d of %d", i + 1, count)
-            page.wait_for_timeout(2000)
-            _create_single_account(page, logger)
+            _login_and_navigate(page, logger)
 
+            for i in range(count):
+                logger.info("🔨 Creating account %d of %d", i + 1, count)
+                page.wait_for_timeout(2_000)
+                _create_single_account(page, logger)
 
-    except Exception as e:
-        logger.exception("Fatal error in account creation loop: %s", e)
-    finally:
-        logger.info("==== Finished account creation ====")
-        # Uncomment to auto-close browser
-        try:
             browser.close()
-            playwright.stop()
-            logger.debug("Browser and Playwright closed.")
-        except Exception as e:
-            logger.warning("Error closing browser/playwright: %s", e)
-
-
-
-def _recharge_account(page, logger: logging.Logger, count: int, account_id):
-    try:
-
-        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
-        if not main_iframe_el or not main_iframe_el.content_frame():
-            raise Exception("Main iframe missing or inaccessible.")
-        main_frame = main_iframe_el.content_frame()
-
-        main_frame.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=10000)
-        main_frame.fill(ACCOUNT_SEARCH_INPUT, account_id)
-
-        main_frame.click("button:has-text('Search')")
-
-        click_recharge_for_account(main_frame, account_id, logger)
-
-        recharge_iframe_el = main_frame.wait_for_selector('iframe[src*="recharge"]', timeout=10000)
-        recharge_frame = recharge_iframe_el.content_frame() if recharge_iframe_el else None
-        if not recharge_frame:
-            raise Exception("Recharge iframe missing or inaccessible.")
-
-        recharge_frame.fill('input[name="balance"]', str(count))
-
-        input("enter")
-
-        recharge_frame.click("button:has-text('Submit')")
-
-        main_iframe_el = page.wait_for_selector(MAIN_IFRAME, timeout=15_000)
-        if not main_iframe_el or not main_iframe_el.content_frame():
-            raise Exception("Main iframe missing or inaccessible.")
-        main_frame = main_iframe_el.content_frame()
-
-        try:
-            el = main_frame.wait_for_selector(ACCOUNT_RECHARGE_SUCCESS, timeout=5000)
-            text = el.inner_text().lower()
-            if any(phrase in text for phrase in ACCOUNT_RECHARGE_SUCCESS_MSG):
-                logger.info("✅ Account deposit successfully.")
-                main_frame.click(ACCOUNT_SUCCESS_CLOSE)
-            else:
-                logger.warning("⚠️ Unexpected success message: %s", text)
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No success message after deposit account.")
-
-    except PlaywrightTimeoutError as to_err:
-        logger.exception("⏳ Timeout during account topup: %s", to_err)
-    except Exception as e:
-        logger.exception("❌ Account topup error: %s", e)
-
-def action_recharge_account(count: int, account_id):
-    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
-
-    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
-
-    playwright = browser = context = page = None
-
-    try:
-        playwright, browser, context, page = _login_and_navigate(logger)
-        _recharge_account(page, logger, count, account_id)
-    except Exception as e:
-        logger.exception("Error during account creation: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account creation: %s", e)
     finally:
-        logger.info("===== topup-account action completed. Closing browser. =====")
-        try:
-            if browser:
-                browser.close()
-                logger.debug("Browser closed.")
-            if playwright:
-                playwright.stop()
-                logger.debug("Playwright stopped.")
-        except Exception as close_exc:
-            logger.exception("Error while closing resources: %s", close_exc)
+        logger.info("🏁 Create‐account action completed.")
+
+
+def action_recharge_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("💸 Starting recharge‐account: %s → %d", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _recharge_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account recharge: %s", e)
+    finally:
+        logger.info("🏁 Recharge‐account action completed.")

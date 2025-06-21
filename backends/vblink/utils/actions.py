@@ -1,42 +1,41 @@
-from playwright.sync_api import Page, TimeoutError
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+import logging
 
-def click_set_score(page: Page, account_id: str, logger) -> bool:
-    """
-    In the Element-UI table whose header has "Connect game provider UID",
-    find the row whose User Name column equals account_id, and click its
-    "Set Score" button.
-    """
+def click_set_score(page: Page, account_id: str, logger: logging.Logger) -> bool:
+    logger.debug(f'🔍 Searching for table with "Connect game provider UID" header…')
+
+    # 1) Wait for the table container to appear
     try:
-        # 1. Find the Element-UI table container by its header
-        table_container = page.locator(
+        table = page.locator(
             "div.el-table",
-            has=page.locator('th:has-text("Connect game provider UID")')
+            has=page.locator("th", has_text="Connect game provider UID")
         ).first
-        if table_container.count() == 0:
-            logger.error('No Element-UI table found with header "Connect game provider UID"')
-            return False
-
-        # 2. Build an XPath that:
-        #    - picks the <tr> whose 2nd <td> exactly matches account_id
-        #    - then selects the Set Score <button>
-        xpath = (
-            f".//tbody/tr[td[2][normalize-space()='{account_id.lower()}']]"
-            "//button[.//span[text()='Set Score']]"
-        )
-
-        button_locator = table_container.locator(f"xpath={xpath}").first
-        if button_locator.count() == 0:
-            logger.error(f'"Set Score" button not found for User Name="{account_id.lower()}"')
-            return False
-
-        # 3. Click it
-        button_locator.click()
-        logger.info(f'Successfully clicked "Set Score" for "{account_id}"')
-        return True
-
-    except TimeoutError as te:
-        logger.error(f'Timeout waiting for elements: {te}')
+        table.wait_for(timeout=10_000)
+    except PlaywrightTimeoutError:
+        logger.error('❌ Table with "Connect game provider UID" not found within timeout.')
         return False
-    except Exception as e:
-        logger.exception(f'Unexpected error in click_set_score: {e}')
+
+    # 2) Find the <tr> whose 2nd <td> matches our account_id (case-insensitive)
+    logger.debug(f'🔍 Searching for row with account_id="{account_id}"…')
+    row = table.locator(
+        "tbody tr",
+        has=page.locator("td:nth-child(2) .cell", has_text=account_id)
+    ).first
+
+    try:
+        row.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        logger.error(f'❌ No row found for account_id="{account_id}"')
         return False
+
+    # 3) Within that row, locate and click the "Set Score" button
+    btn = row.locator("button", has_text="Set Score")
+    try:
+        btn.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        logger.error(f'❌ "Set Score" button not found for account_id="{account_id}"')
+        return False
+
+    btn.click()
+    logger.info(f'✅ Successfully clicked "Set Score" for account_id="{account_id}"')
+    return True

@@ -1,43 +1,33 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-import time
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+import logging
 
-def click_purchase_for_account(page, account_id, logger):
+def click_purchase_for_account(page: Page, account_id: str, logger: logging.Logger):
+    logger.debug(f"Searching for Purchase button for Username: {account_id}")
+
+    # 1) Wait for at least one account row to appear
     try:
-        max_wait = 10
-        found = False
-
-        for _ in range(max_wait):
-            rows = page.query_selector_all("#table-accounts tbody tr[rel='account']")
-            if rows:
-                found = True
-                break
-            time.sleep(1)
-
-        if not found:
-            logger.warning("⚠️ No account rows found within timeout.")
-            return
-
-        for row in rows:
-            cells = row.query_selector_all("td")
-            if len(cells) < 8:
-                continue  # Skip incomplete rows
-
-            username_cell = cells[3]
-            username = username_cell.inner_text().strip()
-
-            if username == account_id:
-                redeem_btn = cells[7].query_selector("button:has-text('Purchase')")
-                if redeem_btn:
-                    redeem_btn.click()
-                    logger.info(f"✅ Clicked Purchase button for Username: {account_id}")
-                    return
-                else:
-                    logger.error(f"❌ Purchase button not found for Username: {account_id}")
-                    return
-
-        logger.warning(f"⚠️ No row matched Username: {account_id}")
-
+        page.locator("#table-accounts tbody tr[rel='account']").first.wait_for(timeout=10_000)
     except PlaywrightTimeoutError:
-        logger.exception("⏳ Timeout while trying to click Purchase.")
-    except Exception as e:
-        logger.exception(f"❌ Error clicking Redeem for Username {account_id}: {e}")
+        raise Exception(" No account rows found within timeout.")
+
+    # 2) Locate the specific row whose 4th <td> matches the account_id
+    row = page.locator(
+        "#table-accounts tbody tr[rel='account']",
+        has=page.locator("td:nth-child(4)", has_text=account_id)
+    ).first
+
+    try:
+        row.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        logger.warning(f"⚠️ No row matched Username: {account_id}")
+        raise Exception(" No row matched Username.")
+
+    # 3) Within that row, find and click the Purchase button in the 8th cell
+    purchase_btn = row.locator("td:nth-child(8) button", has_text="Purchase")
+    try:
+        purchase_btn.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        raise Exception(f"❌ Purchase button not found for Username: {account_id}")
+
+    purchase_btn.click()
+    logger.info(f"✅ Clicked Purchase button for Username: {account_id}")

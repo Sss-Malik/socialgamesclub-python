@@ -1,34 +1,26 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+def click_update_for_account(main_frame, account_id: str, logger):
+    logger.debug(f"Searching for update button for account ID: {account_id}")
 
-def click_update_for_account(main_frame, account_id, logger):
+    # Build a locator for the <tr> whose 3rd <td> text matches account_id
+    row = main_frame.locator(
+        "#item tr.list",
+        has=main_frame.locator(f"td:nth-child(3)", has_text=account_id)
+    ).first
+
+    # Wait for that row to appear
     try:
-        # Wait for table to appear
-        main_frame.wait_for_selector("#item", timeout=5000)
-
-        # Select all rows except the header
-        rows = main_frame.query_selector_all("#item tr.list")
-
-        for row in rows:
-            cells = row.query_selector_all("td")
-            if len(cells) < 3:
-                continue  # skip if row structure is unexpected
-
-            account_cell_text = cells[2].inner_text().strip()
-
-            if account_cell_text == account_id:
-                update_btn = cells[0].query_selector("a")
-                if update_btn:
-                    update_btn.click()
-                    logger.info(f"✅ Clicked update button for account ID: {account_id}")
-                    return
-                else:
-                    logger.error(f"❌ Update button not found in row for account ID: {account_id}")
-                    return
-
-        logger.warning(f"⚠️ No row found for account ID: {account_id}")
-
+        row.wait_for(timeout=5_000)
     except PlaywrightTimeoutError:
-        logger.exception("⏳ Timeout while trying to click update button.")
-    except Exception as e:
-        logger.exception(f"❌ Error clicking update button for account ID {account_id}: {e}")
+        raise Exception(f"No table row found for account ID: {account_id}")
+
+    # Within that row, find the <a> in the first <td> and click it
+    update_btn = row.locator("td:nth-child(1) a")
+    try:
+        update_btn.wait_for(timeout=5_000)
+    except PlaywrightTimeoutError:
+        raise Exception(f"Update button not found in row for account ID: {account_id}")
+
+    update_btn.click()
+    logger.info(f"✅ Clicked update button for account ID: {account_id}")

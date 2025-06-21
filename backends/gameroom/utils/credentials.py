@@ -20,7 +20,7 @@ def generate_credentials():
         while True:
             random_number = ''.join(random.choices(string.digits, k=remaining_length))
             idx = f"{prefix}{BACKEND_SIGNATURE}{random_number}"
-            if any(c.isdigit() for c in account_id) and any(c.isalpha() for c in account_id):
+            if any(c.isdigit() for c in idx) and any(c.isalpha() for c in idx):
                 return idx
 
     account_id = generate_account_id()

@@ -1,6 +1,6 @@
+# automation_gamevault.py
 import logging
-
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
@@ -11,198 +11,192 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 
-def _create_single_account(page, logger: logging.Logger):
-    try:
-        page.wait_for_selector(CREATE_ACCOUNT_INIT, timeout=15_000).click()
-        page.wait_for_selector(ACCOUNT_ID, timeout=10_000)
+
+def _login_and_navigate(page: Page, logger: logging.Logger):
+    logger.info("🚀 Launching browser and navigating to %s", LOGIN_URL)
+    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+
+    acct = page.locator(LOGIN_ACCOUNT)
+    pwd  = page.locator(LOGIN_PASSWORD)
+    cap  = page.locator(CAPTCHA_INPUT)
+    btn  = page.locator(LOGIN_BUTTON)
+
+    for attempt in range(MAX_CAPTCHA_RETRIES):
+        logger.debug(f"Login attempt #{attempt+1}")
+        acct.fill(USERNAME)
+        pwd.fill(PASSWORD)
+
+        logger.debug("Solving CAPTCHA…")
+        # text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        # if not text or text == 0:
+        #     page.reload(wait_until="domcontentloaded")
+        #     continue
+        #
+        # cap.fill(text)
+        if DEBUG:
+            input("DEBUG: Manually complete CAPTCHA, then press Enter…")
+
+        btn.click()
+
+        try:
+            page.locator("p.el-message__content", has_text="incorrect").wait_for(timeout=3_000)
+            logger.warning("❗ CAPTCHA incorrect, retrying…")
+            # solver.report_incorrect_image_captcha()
+            page.reload(wait_until="domcontentloaded")
+        except PlaywrightTimeoutError:
+            logger.info("CAPTCHA accepted.")
+            break
+
+    page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+    logger.info("✅ Logged in successfully.")
+
+
+    page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+def _create_single_account(page: Page, logger: logging.Logger):
+    while True:
+        logger.debug("Opening create‐account form")
+        page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
+        page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials()
-        logger.info("Generated credentials: %s / [REDACTED]", account_id)
+        logger.info("🔑 Generated credentials: %s / [REDACTED]", account_id)
 
-        page.fill(ACCOUNT_ID, account_id)
-        page.fill(ACCOUNT_PASSWORD, password)
-        page.fill(CONFIRM_PASSWORD, password)
-        page.click(CREATE_ACCOUNT)
+        page.locator(ACCOUNT_ID).fill(account_id)
+        page.locator(ACCOUNT_PASSWORD).fill(password)
+        page.locator(CONFIRM_PASSWORD).fill(password)
+
+        page.locator(CREATE_ACCOUNT).click()
+
+        # Short pause to allow message(s) to render
+        page.wait_for_timeout(1000)
+
+        # Look for all visible message contents
+        messages = page.locator("p.el-message__content").all()
+
+        should_restart = False
+        for msg in messages:
+            if msg.is_visible():
+                text = msg.inner_text().strip().lower()
+                if "login name have used" in text or "form is being submitted" in text:
+                    logger.warning("⚠️ Detected message: %r — restarting account creation.", text)
+                    should_restart = True
+                    break
+
+        if should_restart:
+            close_btn = page.locator(
+                ".el-dialog:has(.el-dialog__title:text('Essential information')) .el-dialog__headerbtn")
+            if close_btn.is_visible():
+                close_btn.click()
+                logger.debug("🧹 Closed 'Essential information' dialog.")
+            else:
+                logger.warning("⚠️ 'Essential information' dialog close button not visible.")
+            page.wait_for_timeout(1000)
+            continue
 
         try:
-            el = page.wait_for_selector(ACCOUNT_SUCCESS, timeout=3_000, state="visible")
-            text = el.inner_text().lower()
-            if any(phrase in text for phrase in ACCOUNT_SUCCESS_MSG):
+            dlg = page.locator(".el-dialog:has(#invoiceModel)")
+            dlg.wait_for(timeout=10000, state="visible")
+            text = dlg.inner_text().strip().lower()
+            if "successfully" in text:
                 logger.info("✅ Account created successfully.")
                 save_credentials(account_id, password, logger, DATA_DIR)
-            else:
-                logger.warning("⚠️ Unexpected success message: %s", text)
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No success message after creating account.")
-    except Exception as e:
-        logger.exception("Account creation failed: %s", e)
-
-def _login_and_navigate(logger: logging.Logger):
-    logger.info("Launching browser via Playwright (headed mode)...")
-    playwright = sync_playwright().start()
-
-    try:
-        browser = playwright.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        logger.info("Navigating to login page: %s", LOGIN_URL)
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-
-        for attempt in range(MAX_CAPTCHA_RETRIES):
-            page.wait_for_selector(LOGIN_ACCOUNT, timeout=15_000)
-            page.fill(LOGIN_ACCOUNT, USERNAME)
-            page.fill(LOGIN_PASSWORD, PASSWORD)
-
-
-            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-
-            if text and text == 0:
-                page.reload(wait_until="domcontentloaded")
-                continue
-
-            page.fill(CAPTCHA_INPUT, text)
-
-            if DEBUG:
-                input("DEBUG: Manually complete CAPTCHA and press Enter...")
-
-            page.click(LOGIN_BUTTON)
-
-            try:
-                captcha_status = page.wait_for_selector("p.el-message__content", timeout=3000)
-                text = captcha_status.inner_text()
-                if "incorrect" in text.lower():
-                    logger.warning("Captcha failed. Retrying...")
-                    solver.report_incorrect_image_captcha()
-                    page.reload(wait_until="domcontentloaded")
-                    continue
-            except PlaywrightTimeoutError:
-                logger.info("No captcha incorrect message found. Assuming correct.")
                 break
+            else:
+                logger.warning("⚠️ Unexpected success message: %r", text)
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ No success dialog appeared after creating account.")
 
 
-        page.wait_for_selector(MAIN_PAGE_EL, timeout=20_000)
-        logger.info("Login successful.")
 
-        if URL_CHANGE:
-            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
+    logger.debug("Searching for account to recharge: %s", account_id)
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
 
-        return playwright, browser, context, page
+    click_recharge_for_account(page, account_id, logger)
 
+    # fill amount
+    page.locator("//label[text()='Recharge Amount']/following-sibling::div//input")\
+        .fill(str(amount))
+
+    if DEBUG:
+        input("DEBUG: review recharge amount, then press Enter…")
+
+    # confirm dialog
+    dlg = page.locator("div.el-dialog",
+                      has=page.locator("span.el-dialog__title", has_text="Please confirm your recharge & details!"))
+    confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+
+    messages = page.locator("p.el-message__content").all()
+    for msg in messages:
+        if msg.is_visible():
+            text = msg.inner_text().strip().lower()
+            if "not enougn balance" in text or "form is being submitted" in text:
+                logger.warning("⚠️ Detected message: %r —", text)
+                raise Exception("<UNK> Not enough enough balance.")
+
+    # verify deposit
+    try:
+        invoice = page.locator("#invoiceModel")
+        invoice.wait_for(timeout=10_000, state="visible")
+        deposit = invoice.locator("p", has=page.locator("label", has_text="DEPOSIT:"))
+        deposit.wait_for(timeout=5_000, state="visible")
+        txt = deposit.inner_text().strip().lower()
+        if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
+            logger.info(f"✅ Deposit confirmed: {txt}")
+        else:
+            logger.warning(f"⚠️ Unexpected deposit text: {txt}")
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No deposit confirmation appeared.")
     except Exception as e:
-        logger.exception("Login error: %s", e)
-        try:
-            browser.close()
-        except:
-            pass
-        playwright.stop()
-        raise
-
+        logger.exception(f"❌ Error verifying deposit: {e}")
 
 
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("==== Starting account creation (%d accounts) ====", count)
-
-    playwright = browser = context = page = None
+    logger.info("==== Starting account creation (%d) ====", count)
 
     try:
-        playwright, browser, context, page = _login_and_navigate(logger)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
 
-        for i in range(count):
-            logger.info("Creating account #%d of %d", i + 1, count)
-            _create_single_account(page, logger)
-
-            try:
+            _login_and_navigate(page, logger)
+            for i in range(count):
+                logger.info("🔨 Creating account #%d of %d", i+1, count)
+                _create_single_account(page, logger)
                 page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-            except Exception as e:
-                logger.warning("Failed to reload User Management page: %s", e)
 
-    except Exception as e:
-        logger.exception("Fatal error in account creation loop: %s", e)
-
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Fatal error in create‐account flow: %s", e)
     finally:
         logger.info("==== Finished account creation ====")
-        # Uncomment to auto-close browser
-        try:
-            browser.close()
-            playwright.stop()
-            logger.debug("Browser and Playwright closed.")
-        except Exception as e:
-            logger.warning("Error closing browser/playwright: %s", e)
 
 
-def _recharge_account(page, logger: logging.Logger, count: int, account_id):
-    try:
-
-        page.wait_for_selector(ACCOUNT_SEARCH_INPUT, timeout=15_000)
-        page.fill(ACCOUNT_SEARCH_INPUT, account_id)
-        page.click('button:has-text("search")')
-
-        click_recharge_for_account(page, account_id, logger)
-        page.wait_for_timeout(2000)
-
-        recharge_input = page.wait_for_selector("//label[text()='Recharge Amount']/following-sibling::div//input", timeout=15_000)
-        recharge_input.fill(str(count))
-
-        input("Press Enter to continue...")
-
-        # Step 1: Locate the dialog by its title
-        dialog = page.locator("div.el-dialog", has=page.locator("span.el-dialog__title",
-                                                                has_text="Please confirm your recharge & details!"))
-
-        # Step 2: Within that dialog, find the Confirm button
-        confirm_button = dialog.locator(".el-dialog__footer >> button.el-button--primary:has-text('Confirm')")
-
-        # Step 3: Wait for the Confirm button to be visible and click it
-        confirm_button.wait_for(state="visible", timeout=10000)
-        confirm_button.click()
-
-        try:
-            # Wait for the invoice model dialog to appear and be visible
-            invoice_model = page.wait_for_selector("#invoiceModel", timeout=10000, state="visible")
-
-            # Extract the text content of the <p> containing the DEPOSIT label
-            deposit_element = page.wait_for_selector("#invoiceModel p:has(label:text('DEPOSIT:'))", timeout=5000,
-                                                     state="visible")
-            deposit_text = deposit_element.inner_text().strip().lower()
-
-            if deposit_text.startswith("deposit:") and any(char.isdigit() for char in deposit_text):
-                logger.info(f"✅ Account deposit successfully detected: {deposit_text}")
-            else:
-                logger.warning(f"⚠️ Unexpected deposit info text: {deposit_text}")
-
-        except PlaywrightTimeoutError:
-            logger.warning("⚠️ No deposit confirmation dialog appeared after confirming recharge.")
-        except Exception as e:
-            logger.exception(f"❌ Error verifying deposit success: {e}")
-
-    except PlaywrightTimeoutError as to_err:
-        logger.exception("⏳ Timeout during account topup: %s", to_err)
-    except Exception as e:
-        logger.exception("❌ Account topup error: %s", e)
-
-def action_recharge_account(count: int, account_id):
+def action_recharge_account(count: int, account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
-
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting topup action: count=%d, account_id=%s", count, account_id)
-
-    playwright = browser = context = page = None
+    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
 
     try:
-        playwright, browser, context, page = _login_and_navigate(logger)
-        _recharge_account(page, logger, count, account_id)
-    except Exception as e:
-        logger.exception("Error during account creation: %s", e)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _recharge_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during recharge flow: %s", e)
     finally:
-        logger.info("===== topup-account action completed. Closing browser. =====")
-        try:
-            if browser:
-                browser.close()
-                logger.debug("Browser closed.")
-            if playwright:
-                playwright.stop()
-                logger.debug("Playwright stopped.")
-        except Exception as close_exc:
-            logger.exception("Error while closing resources: %s", close_exc)
+        logger.info("===== Finished recharge process =====")
