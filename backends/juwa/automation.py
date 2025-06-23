@@ -5,6 +5,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 
 from backends.juwa.config import *
 from backends.juwa.utils.actions import click_recharge_for_account
+from backends.juwa.utils.actions import click_redeem_for_account
 
 from common.utils.logger import get_backend_logger
 from common.utils.credential_utils import generate_credentials
@@ -155,6 +156,55 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.info("No error messages detected. Assuming success")
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    logger.debug("Searching for account to withdraw: %s", account_id)
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    click_redeem_for_account(page, account_id, logger)
+    dlg = page.locator(
+        "div.el-dialog",
+        has=page.locator("span.el-dialog__title", has_text="Please confirm your redeem & details!")
+    )
+    dlg.wait_for(timeout=15_000, state="visible")
+
+    redeem_input = dlg.locator(
+        "//label[text()='Redeem Amount']/following-sibling::div//input"
+    )
+    redeem_input.wait_for(timeout=15_000)
+    redeem_input.fill(str(count))
+
+    if DEBUG:
+        input("DEBUG: review recharge amount, then press Enter…")
+
+
+    confirm_btn = dlg.locator(
+        ".el-dialog__footer button.el-button--primary",
+        has_text="Confirm"
+    )
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+
+    try:
+        page.wait_for_selector("p.el-message__content", timeout=3000, state="attached")
+        messages = page.locator("p.el-message__content").all()
+        for msg in messages:
+            if msg.is_visible():
+                text = msg.inner_text().strip().lower()
+                if "the redeem amount can not be greater than the balance on the body！" in text:
+                    logger.warning("⚠️ Customer balance insufficient")
+                    return
+                if "success" in text:
+                    logger.info(f"✅ Account withdraw successful")
+                else:
+                    logger.info(f"Unknown withdraw confirm message")
+
+    except PlaywrightTimeoutError:
+        logger.info("No error messages detected. Assuming success")
+
+
 
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
@@ -193,6 +243,28 @@ def action_recharge_account(count: int, account_id: str):
 
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
+
+            browser.close()
+    except PlaywrightTimeoutError as e:
+        logger.exception("⏳ Timeout during recharge flow: %s", e)
+    except Exception as e:
+        logger.exception("❌ Error during recharge flow: %s", e)
+    finally:
+        logger.info("===== Finished recharge process =====")
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
 
             browser.close()
     except PlaywrightTimeoutError as e:

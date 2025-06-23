@@ -5,6 +5,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 from backends.gameroom.config import *
 from backends.gameroom.utils.credentials import generate_credentials
 from backends.gameroom.utils.actions import click_recharge_for_account
+from backends.gameroom.utils.actions import click_withdraw_for_account
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
@@ -102,6 +103,45 @@ def _create_single_account(page: Page, logger: logging.Logger):
             break
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    # locate main iframe once
+    main_iframe = page.frame_locator(MAIN_IFRAME)
+
+    # search
+    main_iframe.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main_iframe.locator("button:has-text('Search')").click()
+
+    # call your existing helper (which still expects a Frame object)
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame_obj = frame_el.content_frame()
+    click_withdraw_for_account(frame_obj, account_id, logger)
+
+    page.wait_for_timeout(1000)
+
+    # fill & submit recharge form
+    withdraw_iframe = main_iframe.frame_locator('iframe[src*="withdraw"]')
+
+    withdraw_iframe.locator("div.layui-form-item:has(label:text('Withdraw Balance')) input").fill(str(count))
+    if DEBUG:
+        input("DEBUG: review withdraw form, then press Enter…")
+    withdraw_iframe.locator("button:has-text('Submit')").click()
+
+    # wait for confirmation
+    try:
+        result = withdraw_iframe.locator("div.layui-layer.layui-layer-dialog")
+        result.wait_for(timeout=5_000, state="visible")
+        text = result.inner_text().strip().lower()
+        if "successful" in text:
+            logger.info("✅ Account withdraw successful.")
+        elif "withdrawal amount is greater than customer balance" in text:
+            logger.info("Customer balance insufficient")
+        else:
+            logger.warning("⚠️ Unexpected withdraw message: %r", text)
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No withdraw confirmation dialog appeared.")
+
+
+
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
     # locate main iframe once
     main_iframe = page.frame_locator(MAIN_IFRAME)
@@ -126,7 +166,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     try:
         result = recharge_iframe.locator(ACCOUNT_RECHARGE_SUCCESS)
         result.wait_for(timeout=5_000)
-        text = result.inner_text().lower()
+        text = result.inner_text().strip().lower()
         if "successful" in text:
             logger.info("✅ Account deposit successful.")
             main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
@@ -180,3 +220,24 @@ def action_recharge_account(count: int, account_id: str):
         logger.exception("❌ Error during account recharge: %s", e)
     finally:
         logger.info("🏁 Recharge‐account action completed.")
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("💸 Starting withdraw‐account: %s → %d", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account recharge: %s", e)
+    finally:
+        logger.info("🏁 Withdraw‐account action completed.")
+
