@@ -26,12 +26,12 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         acct.fill(USERNAME)
         pwd.fill(PASSWORD)
 
-        # text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        # if not text or text == 0:
-        #     page.reload(wait_until="domcontentloaded")
-        #     continue
-        #
-        # cap.fill(text)
+        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        if not text or text == 0:
+            page.reload(wait_until="domcontentloaded")
+            continue
+
+        cap.fill(text)
         if DEBUG:
             input("DEBUG MODE: Enter CAPTCHA manually, then press Enter to continue…")
 
@@ -40,7 +40,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         try:
             page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=3_000)
             logger.warning("Captcha failed. Retrying…")
-            # solver.report_incorrect_image_captcha()
+            solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
         except PlaywrightTimeoutError:
             logger.info("No captcha-error found; proceeding.")
@@ -119,6 +119,45 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.warning("⚠️ Unknown status message: %r", result)
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    # search for the account
+    main = page.frame_locator(MAIN_IFRAME)
+    main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main.locator(ACCOUNT_SEARCH_BUTTON).click()
+    page.wait_for_timeout(5_000)  # wait for results to show up
+
+    # click the “Update” (via your helper) then Recharge
+    # note: click_update_for_account still expects a Frame object, so we grab it here:
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+    click_update_for_account(frame, account_id, logger)
+
+    main.locator("a", has_text="Redeem").click()
+
+    # fill recharge count
+    redeem = page.frame_locator('iframe[src*="AccountManager"]')
+    customer_balance = redeem.locator('input#txtLeScore').get_attribute('value')
+    logger.info(f"Extracted value: {customer_balance}")
+
+    if count > float(customer_balance):
+        logger.warning("⚠️ Customer balance insufficient.")
+        return
+
+    redeem.locator("input#txtAddGold").fill(str(count))
+    redeem.locator('input[type="button"][value="Redeem"]').click()
+
+    # feedback
+    page.locator("#mb_con").wait_for(timeout=5_000)
+    text = page.locator("#mb_con").inner_text().lower().strip()
+    if "successful" in text:
+        logger.info("✅ Account successfully redeemed.")
+    elif "not enough gold" in text:
+        logger.warning("⚠️ Customer balance insufficient.")
+    else:
+        logger.warning("⚠️ Unexpected redeem message: %r", text)
+
+
+
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -164,3 +203,25 @@ def action_recharge_account(count: int, account_id: str):
         logger.exception("Error during recharge: %s", e)
     finally:
         logger.info("===== Topup-account action completed =====")
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting withdraw-account action: account_id=%s, count=%d =====",
+                account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account recharge: %s", e)
+    finally:
+        logger.info("===== Withdraw-account action completed =====")

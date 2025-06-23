@@ -5,8 +5,7 @@ def click_update_for_account(main_frame, account_id: str, logger):
 
     # Build a locator for the <tr> whose 3rd <td> text matches account_id
     row = main_frame.locator(
-        "#item tr.list",
-        has=main_frame.locator(f"td:nth-child(3)", has_text=account_id)
+        f"//tr[contains(@class, 'list')][td[3][normalize-space(text())='{account_id}']]"
     ).first
 
     # Wait for that row to appear

@@ -10,6 +10,7 @@ from common.utils.handle_captcha import handle_captcha
 from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
+from backends.gamevault.utils.actions import click_redeem_for_account
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
@@ -157,6 +158,51 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         logger.exception(f"❌ Error verifying deposit: {e}")
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
+    logger.debug("Searching for account to withdraw: %s", account_id)
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    click_redeem_for_account(page, account_id, logger)
+
+    # confirm dialog
+    dlg = page.locator("div.el-dialog",
+                       has=page.locator("span.el-dialog__title", has_text="Please confirm your redeem & details!"))
+
+    dlg.wait_for(timeout=10_000, state="visible")
+
+    # fill amount
+    dlg.locator("//label[text()='Redeem Amount']/following-sibling::div//input")\
+        .fill(str(amount))
+
+    if DEBUG:
+        input("DEBUG: review withdraw amount, then press Enter…")
+
+
+    confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+
+    # verify withdraw
+    try:
+        messages = page.locator("p.el-message__content").all()
+        for msg in messages:
+            if msg.is_visible():
+                text = msg.inner_text().strip().lower()
+                if "the redeem amount can not be greater than the balance on the body！" in text:
+                    logger.warning("⚠️ Customer balance insufficient")
+                    return
+                elif "success" in text:
+                    logger.info(f"✅ Withdraw confirmed")
+                else:
+                    logger.warning(f"⚠️ Unexpected deposit text: {text}")
+
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No deposit confirmation appeared.")
+
+
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -194,6 +240,28 @@ def action_recharge_account(count: int, account_id: str):
 
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during recharge flow: %s", e)
+    finally:
+        logger.info("===== Finished recharge process =====")
+
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
 
             browser.close()
     except (PlaywrightTimeoutError, Exception) as e:
