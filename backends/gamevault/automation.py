@@ -28,12 +28,12 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        # text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        # if not text or text == 0:
-        #     page.reload(wait_until="domcontentloaded")
-        #     continue
-        #
-        # cap.fill(text)
+        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        if not text or text == 0:
+            page.reload(wait_until="domcontentloaded")
+            continue
+
+        cap.fill(text)
         if DEBUG:
             input("DEBUG: Manually complete CAPTCHA, then press Enter…")
 
@@ -42,7 +42,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         try:
             page.locator("p.el-message__content", has_text="incorrect").wait_for(timeout=3_000)
             logger.warning("❗ CAPTCHA incorrect, retrying…")
-            # solver.report_incorrect_image_captcha()
+            solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
         except PlaywrightTimeoutError:
             logger.info("CAPTCHA accepted.")
