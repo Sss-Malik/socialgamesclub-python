@@ -10,6 +10,7 @@ from common.utils.handle_captcha import handle_captcha
 from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
+from backends.gamevault.utils.actions import click_redeem_for_account
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
@@ -27,12 +28,12 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        # text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        # if not text or text == 0:
-        #     page.reload(wait_until="domcontentloaded")
-        #     continue
-        #
-        # cap.fill(text)
+        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        if not text or text == 0:
+            page.reload(wait_until="domcontentloaded")
+            continue
+
+        cap.fill(text)
         if DEBUG:
             input("DEBUG: Manually complete CAPTCHA, then press Enter…")
 
@@ -41,7 +42,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         try:
             page.locator("p.el-message__content", has_text="incorrect").wait_for(timeout=3_000)
             logger.warning("❗ CAPTCHA incorrect, retrying…")
-            # solver.report_incorrect_image_captcha()
+            solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
         except PlaywrightTimeoutError:
             logger.info("CAPTCHA accepted.")
@@ -108,6 +109,31 @@ def _create_single_account(page: Page, logger: logging.Logger):
             logger.warning("⚠️ No success dialog appeared after creating account.")
 
 
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    row = page.locator(
+        "table.el-table__body tbody tr"
+    ).filter(
+        has=page.locator(f"td .cell:text('{account_id}')")
+    ).first
+
+    row.wait_for(timeout=5000)
+
+    data = {
+        "id": row.locator("td:nth-child(2) .cell").inner_text().strip(),
+        "account": row.locator("td:nth-child(4) .cell").inner_text().strip(),
+        "balance": row.locator("td:nth-child(5) .cell").inner_text().strip(),
+        "created_at": row.locator("td:nth-child(7) .cell").inner_text().strip(),
+        "login_count": row.locator("td:nth-child(9) .cell").inner_text().strip(),
+        "last_login": row.locator("td:nth-child(10) .cell").inner_text().strip(),
+        "last_login_ip": row.locator("td:nth-child(11) .cell").inner_text().strip(),
+    }
+
+    logger.info("✅ Extracted row data: %s", data)
+
+
 
 def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
     logger.debug("Searching for account to recharge: %s", account_id)
@@ -157,6 +183,51 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         logger.exception(f"❌ Error verifying deposit: {e}")
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
+    logger.debug("Searching for account to withdraw: %s", account_id)
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    click_redeem_for_account(page, account_id, logger)
+
+    # confirm dialog
+    dlg = page.locator("div.el-dialog",
+                       has=page.locator("span.el-dialog__title", has_text="Please confirm your redeem & details!"))
+
+    dlg.wait_for(timeout=10_000, state="visible")
+
+    # fill amount
+    dlg.locator("//label[text()='Redeem Amount']/following-sibling::div//input")\
+        .fill(str(amount))
+
+    if DEBUG:
+        input("DEBUG: review withdraw amount, then press Enter…")
+
+
+    confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+
+    # verify withdraw
+    try:
+        messages = page.locator("p.el-message__content").all()
+        for msg in messages:
+            if msg.is_visible():
+                text = msg.inner_text().strip().lower()
+                if "the redeem amount can not be greater than the balance on the body！" in text:
+                    logger.warning("⚠️ Customer balance insufficient")
+                    return
+                elif "success" in text:
+                    logger.info(f"✅ Withdraw confirmed")
+                else:
+                    logger.warning(f"⚠️ Unexpected deposit text: {text}")
+
+    except PlaywrightTimeoutError:
+        logger.warning("⚠️ No deposit confirmation appeared.")
+
+
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -200,3 +271,46 @@ def action_recharge_account(count: int, account_id: str):
         logger.exception("❌ Error during recharge flow: %s", e)
     finally:
         logger.info("===== Finished recharge process =====")
+
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during recharge flow: %s", e)
+    finally:
+        logger.info("===== Finished recharge process =====")
+
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting read: %s =====", account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during read flow: %s", e)
+    finally:
+        logger.info("===== Finished read process =====")

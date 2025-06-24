@@ -133,6 +133,111 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         break
 
 
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    for attempt in range(5):
+        page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        page.locator("label.el-radio", has_text="Player account").click()
+
+        page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+        page.locator("form.el-form.m-fm button:has-text('OK')").first.click()
+
+        page.wait_for_timeout(1000)
+
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=2000)
+            text = err.inner_text().strip().lower()
+            if "error: 167" in text or "frequency of requests is too high" in text:
+                logger.warning("⚠️ Frequency too high, retrying…")
+                continue
+        except PlaywrightTimeoutError:
+            logger.info("✅ No error message, proceeding…")
+
+        table = page.locator(
+            "div.el-table",
+            has=page.locator("th", has_text="Connect game provider UID")
+        ).first
+
+        table.wait_for(timeout=10000)
+
+        row = table.locator(
+            "tbody tr",
+            has=page.locator("td:nth-child(2) .cell", has_text=account_id)
+        ).first
+
+        row.wait_for(timeout=5000)
+
+        data = {
+            "account": row.locator("td:nth-child(2) .cell span").inner_text().strip(),
+            "balance": row.locator("td:nth-child(10) .cell span").inner_text().strip(),
+        }
+
+        logger.info("✅ Extracted row data: %s", data)
+        break
+
+def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_id: str):
+    for attempt in range(5):
+        page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        page.locator("label.el-radio", has_text="Player account").click()
+
+        page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+        page.locator("form.el-form.m-fm button:has-text('OK')").first.click()
+
+        page.wait_for_timeout(1000)
+
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=2000)
+            text = err.inner_text().strip().lower()
+            if "error: 167" in text or "frequency of requests is too high" in text:
+                logger.warning("⚠️ Frequency too high, retrying…")
+                continue
+        except PlaywrightTimeoutError:
+            logger.info("✅ No error message, proceeding…")
+
+
+        # open the score‐setting UI
+        click_set_score(page, account_id, logger)
+
+        # check for rate‐limit error
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=2000)
+            text = err.inner_text().strip().lower()
+            if "error: 167" in text or "frequency of requests is too high" in text:
+                logger.warning("⚠️ Frequency too high, retrying…")
+                continue
+        except PlaywrightTimeoutError:
+            logger.info("✅ No error message, proceeding…")
+
+        # fill in points
+        inp = page.locator('input[placeholder="Set points : ie 100"]')
+        inp.wait_for(timeout=5_000, state="visible")
+        inp.fill(f"-{str(points)}")
+
+        if DEBUG:
+            input("DEBUG: verify points then press Enter…")
+
+        # confirm
+        page.locator(
+            "//div[contains(@class,'el-form-item__content') and .//span[text()='Cancel']]//span[text()='OK']"
+        ).click()
+
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=3000)
+            text = err.inner_text().strip().lower()
+            if "cannot exceed current points" in text:
+                logger.warning("⚠️ Customer balance insufficient")
+                return
+            elif "sucessful operation" in text:
+                logger.info("Account successfully redeemed.")
+                return
+        except PlaywrightTimeoutError:
+            logger.warning("⚠️ No dialog appeared after setting score.")
+        break
+
+
 
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
@@ -178,3 +283,46 @@ def action_recharge_account(count: int, account_id: str):
         logger.exception("❌ Error during score‐set process: %s", e)
     finally:
         logger.info("===== Score‐set action completed =====")
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting redeem action: %s → %d count =====", account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
+
+            browser.close()
+    except PlaywrightTimeoutError as te:
+        logger.exception("Timeout during redeem: %s", te)
+    except Exception as e:
+        logger.exception("❌ Error during redeem process: %s", e)
+    finally:
+        logger.info("===== Redeem action completed =====")
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting read action: %s =====", account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except PlaywrightTimeoutError as te:
+        logger.exception("Timeout during read: %s", te)
+    except Exception as e:
+        logger.exception("❌ Error during read process: %s", e)
+    finally:
+        logger.info("===== Read action completed =====")

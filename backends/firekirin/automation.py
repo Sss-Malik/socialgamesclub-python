@@ -44,9 +44,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         # check for “incorrect” message
         try:
             # this will time out quickly if no “incorrect” banner shows
-            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=3_000)
+            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=5000)
+            page.locator("input#mb_btn_ok").click()
             logger.warning("CAPTCHA was incorrect, retrying…")
-            # solver.report_incorrect_image_captcha()
+            solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
             continue
         except PlaywrightTimeoutError:
@@ -126,6 +127,69 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.warning("⚠️ Unexpected recharge message: %r", text)
 
 
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
+    # search for the account
+    main = page.frame_locator(MAIN_IFRAME)
+    main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main.locator(ACCOUNT_SEARCH_BUTTON).click()
+    page.wait_for_timeout(5_000)  # wait for results to show up
+
+    # click the “Update” (via your helper) then Recharge
+    # note: click_update_for_account still expects a Frame object, so we grab it here:
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+    click_update_for_account(frame, account_id, logger)
+
+    main.locator("a", has_text="Redeem").click()
+
+    # fill recharge count
+    redeem = page.frame_locator('iframe[src*="AccountManager"]')
+    customer_balance = redeem.locator('input#txtLeScore').get_attribute('value')
+    logger.info(f"Extracted value: {customer_balance}")
+
+    if count > float(customer_balance):
+        logger.warning("⚠️ Customer balance insufficient.")
+        return
+
+    redeem.locator("input#txtAddGold").fill(str(count))
+    redeem.locator('input[type="button"][value="Redeem"]').click()
+
+    # feedback
+    page.locator("#mb_con").wait_for(timeout=5_000)
+    text = page.locator("#mb_con").inner_text().lower().strip()
+    if "successful" in text:
+        logger.info("✅ Account successfully redeemed.")
+    elif "not enough gold" in text:
+        logger.warning("⚠️ Customer balance insufficient.")
+    else:
+        logger.warning("⚠️ Unexpected redeem message: %r", text)
+
+
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    main = page.frame_locator(MAIN_IFRAME)
+    main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main.locator(ACCOUNT_SEARCH_BUTTON).click()
+    table = main.locator("table#item")
+    table.wait_for(timeout=5000, state="visible")
+
+    row = table.locator(
+        f"//tr[contains(@class, 'list')][td[3][normalize-space(text())='{account_id}']]"
+    ).first
+    row.wait_for(timeout=5000)
+    if row.is_visible():
+        logger.info(f"<UNK> Account successfully read.")
+        data = {
+            "account_id": row.locator("td:nth-child(3)").inner_text().strip(),
+            "nickname": row.locator("td:nth-child(4)").inner_text().strip(),
+            "balance": row.locator("td:nth-child(5)").inner_text().strip(),
+            "register_date": row.locator("td:nth-child(6)").inner_text().strip(),
+            "last_login": row.locator("td:nth-child(7)").inner_text().strip(),
+            "manager": row.locator("td:nth-child(8)").inner_text().strip(),
+            "status": row.locator("td:nth-child(9)").inner_text().strip(),
+        }
+        logger.info("✅ Extracted row data: %s", data)
+
+
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -170,3 +234,50 @@ def action_recharge_account(count: int, account_id: str):
         logger.exception("❌ Error during account recharge: %s", e)
     finally:
         logger.info("===== Recharge-account action completed =====")
+
+
+
+def action_withdraw_account(count: int, account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting withdraw-account action: account_id=%s, count=%d =====",
+                account_id, count)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _withdraw_account(page, logger, count, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account recharge: %s", e)
+    finally:
+        logger.info("===== Withdraw-account action completed =====")
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting read-account action: account_id=%s =====",
+                account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account recharge: %s", e)
+    finally:
+        logger.info("===== Read-account action completed =====")
+
+
+
