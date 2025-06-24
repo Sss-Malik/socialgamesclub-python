@@ -141,6 +141,37 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.warning("⚠️ No withdraw confirmation dialog appeared.")
 
 
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    # locate main iframe once
+    main_iframe = page.frame_locator(MAIN_IFRAME)
+
+    # search
+    main_iframe.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    main_iframe.locator("button:has-text('Search')").click()
+
+    table = main_iframe.locator("div.layui-table-body.layui-table-main table.layui-table")
+    table.wait_for(timeout=5000, state="visible")
+
+    row = main_iframe.locator(
+        "div.layui-table-body.layui-table-main table.layui-table > tbody > tr"
+    ).filter(
+        has=main_iframe.locator(f"td[data-field='Account'] >> text='{account_id}'")
+    ).first
+
+    row.wait_for(timeout=5000)
+
+    data = {
+        "id": row.locator("td[data-field='Id']").inner_text().strip(),
+        "account": row.locator("td[data-field='Account']").inner_text().strip(),
+        "nickname": row.locator("td[data-field='nickname']").inner_text().strip(),
+        "balance": row.locator("td[data-field='score']").inner_text().strip(),
+        "created_at": row.locator("td[data-field='AddDate']").inner_text().strip(),
+        "login_count": row.locator("td[data-field='LoginCount']").inner_text().strip(),
+        "last_login": row.locator("td[data-field='lasttime']").inner_text().strip(),
+        "last_login_ip": row.locator("td[data-field='loginip']").inner_text().strip(),
+    }
+    logger.info("✅ Extracted row data: %s", data)
+
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
     # locate main iframe once
@@ -240,4 +271,24 @@ def action_withdraw_account(count: int, account_id: str):
         logger.exception("❌ Error during account recharge: %s", e)
     finally:
         logger.info("🏁 Withdraw‐account action completed.")
+
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("💸 Starting read‐account: %s", account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.exception("❌ Error during account read: %s", e)
+    finally:
+        logger.info("🏁 Read‐account action completed.")
 
