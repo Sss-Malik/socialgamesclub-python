@@ -30,23 +30,20 @@ def _create_single_account(page: Page, logger: logging.Logger):
     # open the “create account” form
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=15_000)
 
-    # generate creds
-    account_id, password = generate_credentials()
-    logger.info("🔑 Generated credentials: %s / [REDACTED]", account_id)
-
-    # fill & submit
-    page.locator(ACCOUNT_ID).fill(account_id)
     page.locator(ACCOUNT_BALANCE).fill("0")
     page.locator(CREATE_ACCOUNT).click()
 
     # wait for feedback
     try:
-        alert = page.locator(ACCOUNT_SUCCESS).first
-        alert.wait_for(state="visible", timeout=3_000)
+        alert = page.locator(
+            "div.alert.alert-error, div.alert.alert-success",
+        )
+        alert.wait_for(timeout=20_000, state="visible")
         text = alert.inner_text().strip().lower()
         if "successfully created" in text:
+            account_id = alert.locator("b").nth(0).inner_text().strip()
             logger.info("✅ Account created successfully.")
-            save_credentials(account_id, password, logger, DATA_DIR)
+            save_credentials(account_id, "null", logger, DATA_DIR)
         else:
             logger.warning("⚠️ Unexpected success message: %r", text)
     except PlaywrightTimeoutError:
