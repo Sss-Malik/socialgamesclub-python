@@ -156,6 +156,30 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.info("No error messages detected. Assuming success")
 
 
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    row = page.locator(
+        "table.el-table__body tbody tr"
+    ).filter(
+        has=page.locator(f"td:nth-child(4) .cell:text('{account_id}')")
+    ).first
+
+    row.wait_for(timeout=5000)
+
+    data = {
+        "id": row.locator("td:nth-child(3) .cell").inner_text().strip(),
+        "account": row.locator("td:nth-child(4) .cell").inner_text().strip(),
+        "balance": row.locator("td:nth-child(5) .cell").inner_text().strip(),
+        "created_at": row.locator("td:nth-child(7) .cell").inner_text().strip(),
+        "login_count": row.locator("td:nth-child(9) .cell").inner_text().strip(),
+        "last_login": row.locator("td:nth-child(10) .cell").inner_text().strip(),
+        "last_login_ip": row.locator("td:nth-child(11) .cell").inner_text().strip(),
+    }
+
+    logger.info("✅ Extracted row data: %s", data)
+
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
     logger.debug("Searching for account to withdraw: %s", account_id)
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -273,3 +297,24 @@ def action_withdraw_account(count: int, account_id: str):
         logger.exception("❌ Error during recharge flow: %s", e)
     finally:
         logger.info("===== Finished recharge process =====")
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting read: %s =====", account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            page = browser.new_context().new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except PlaywrightTimeoutError as e:
+        logger.exception("⏳ Timeout during read flow: %s", e)
+    except Exception as e:
+        logger.exception("❌ Error during read flow: %s", e)
+    finally:
+        logger.info("===== Finished read process =====")

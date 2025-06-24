@@ -107,6 +107,32 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.warning("⚠️ Matched an alert, but unknown type: %s", text)
 
 
+def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
+    acc_sr.wait_for(timeout=15_000)
+    acc_sr.fill(account_id)
+    page.locator('button:has-text("Search")').click()
+
+    row = page.locator(
+        "#table-accounts tbody tr[rel='account']"
+    ).filter(
+        has=page.locator(f"td:nth-child(2) span.label:text('{account_id}')")
+    ).first
+
+    row.wait_for(timeout=5000)
+
+    data = {
+        "account_number": row.locator("td:nth-child(2) span.label").inner_text().strip(),
+        "username_notes": row.locator("td:nth-child(4)").inner_text().strip(),
+        "created": row.locator("td:nth-child(5)").inner_text().strip(),
+        "balance": row.locator("td:nth-child(6) code[rel='balance']").inner_text().strip(),
+        "total_wins": row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip(),
+        "state": row.locator("td:nth-child(7) span[rel='online']").inner_text().strip(),
+    }
+
+
+    logger.info("✅ Extracted row data: %s", data)
+
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
     # search for user
@@ -234,3 +260,23 @@ def action_withdraw_account(count: int, account_id: str):
         logger.exception("🔥 Error during withdraw process: %s", e)
     finally:
         logger.info("===== Withdraw process finished =====")
+
+def action_read_account(account_id: str):
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("===== Starting read: account_id=%s =====", account_id)
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            _login_and_navigate(page, logger)
+            _read_account(page, logger, account_id)
+
+            browser.close()
+    except Exception as e:
+        logger.exception("🔥 Error during read process: %s", e)
+    finally:
+        logger.info("===== Read process finished =====")
