@@ -38,7 +38,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         btn.click()
 
         try:
-            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=3_000)
+            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=5000)
+            page.locator("input#mb_btn_ok").click()
             logger.warning("Captcha failed. Retrying…")
             solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")

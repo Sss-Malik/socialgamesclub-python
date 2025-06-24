@@ -44,7 +44,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         # check for “incorrect” message
         try:
             # this will time out quickly if no “incorrect” banner shows
-            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=3_000)
+            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=5000)
+            page.locator("input#mb_btn_ok").click()
             logger.warning("CAPTCHA was incorrect, retrying…")
             solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
