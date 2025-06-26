@@ -10,6 +10,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 
+from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.info("Navigating to login page: %s", LOGIN_URL)
@@ -20,19 +21,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
     page.locator(LOGIN_BUTTON).click()
 
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-    logger.info("✅ Login successful.")
 
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+    logger.info("✅ Login and navigation successful.")
+
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
+    logger.debug("Initiating create account dialog.")
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
     while True:
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials()
-        logger.info("🔑 Generated credentials: %s / [REDACTED]", account_id)
+        logger.debug(f"Generated credentials: {account_id} / {password}")
 
         page.locator(ACCOUNT_ID).fill(account_id)
         page.locator(ACCOUNT_PASSWORD).fill(password)
@@ -71,6 +74,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
 
 def _recharge_account(page: Page, logger: logging.Logger, points: int, account_id: str):
+    logger.debug(f"Starting recharge for account: {account_id} with count: {points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -111,7 +115,7 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         inp.fill(str(points))
 
         if DEBUG:
-            input("DEBUG: verify points then press Enter…")
+            input("Debug mode activated. Press enter to continue...")
 
         # confirm
         page.locator(
@@ -124,16 +128,17 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             alert.wait_for(state="visible", timeout=5_000)
             text = alert.inner_text().strip().lower()
             if "not authorized to check remaining balance" in text:
-                logger.warning("Backend balance insufficient")
+                logger.error("Backend balance insufficient")
                 return
             elif "sucessful operation" in text:
                 logger.info("Account successfully recharged.")
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ No dialog appeared after setting score.")
+            logger.exception("⚠️ No dialog appeared after setting score.")
         break
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    logger.debug(f"Reading account: {account_id}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -176,6 +181,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         break
 
 def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_id: str):
+    logger.debug(f"Starting withdraw for account: {account_id} with count: {points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -216,7 +222,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
         inp.fill(f"-{str(points)}")
 
         if DEBUG:
-            input("DEBUG: verify points then press Enter…")
+            input("Debug mode activated. Press enter to continue...")
 
         # confirm
         page.locator(
@@ -228,13 +234,13 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=3000)
             text = err.inner_text().strip().lower()
             if "cannot exceed current points" in text:
-                logger.warning("⚠️ Customer balance insufficient")
+                logger.error("⚠️ Customer balance insufficient")
                 return
             elif "sucessful operation" in text:
                 logger.info("Account successfully redeemed.")
                 return
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ No dialog appeared after setting score.")
+            logger.exception("⚠️ No dialog appeared after setting score.")
         break
 
 
@@ -246,8 +252,27 @@ def action_create_account(count: int):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=HEADLESS,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             for i in range(count):
@@ -255,12 +280,10 @@ def action_create_account(count: int):
                 _create_single_account(page, logger)
                 page.reload(wait_until="domcontentloaded")
             browser.close()
-    except PlaywrightTimeoutError as te:
-        logger.exception("Timeout during recharge: %s", te)
-    except Exception as e:
-        logger.exception("🔥 Fatal error in account creation: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account creation: %s", e, exc_info=True)
     finally:
-        logger.info("==== Finished account creation ====")
+        logger.info("Create-account action completed.")
 
 
 def action_recharge_account(count: int, account_id: str):
@@ -270,19 +293,36 @@ def action_recharge_account(count: int, account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=HEADLESS,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as te:
-        logger.exception("Timeout during recharge: %s", te)
-    except Exception as e:
-        logger.exception("❌ Error during score‐set process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account recharge: %s", e, exc_info=True)
     finally:
-        logger.info("===== Score‐set action completed =====")
+        logger.info("Recharge-account action completed.")
 
 
 def action_withdraw_account(count: int, account_id: str):
@@ -292,19 +332,36 @@ def action_withdraw_account(count: int, account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=HEADLESS,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _withdraw_account(page, logger, count, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as te:
-        logger.exception("Timeout during redeem: %s", te)
-    except Exception as e:
-        logger.exception("❌ Error during redeem process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account withdrawal: %s", e, exc_info=True)
     finally:
-        logger.info("===== Redeem action completed =====")
+        logger.info("===== Withdraw-account action completed =====")
 
 def action_read_account(account_id: str):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
@@ -313,16 +370,33 @@ def action_read_account(account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=HEADLESS,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _read_account(page, logger, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as te:
-        logger.exception("Timeout during read: %s", te)
-    except Exception as e:
-        logger.exception("❌ Error during read process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account read: %s", e, exc_info=True)
     finally:
-        logger.info("===== Read action completed =====")
+        logger.info("===== Read-account action completed =====")

@@ -18,7 +18,7 @@ def click_recharge_for_account(page: Page, account_id: str, logger):
     try:
         row.wait_for(timeout=5_000)
     except PlaywrightTimeoutError:
-        logger.warning(f"⚠️ No row matched Username: {account_id}")
+        logger.exception(f"⚠️ No row matched Username: {account_id}")
         raise Exception(f"<UNK> No row matched Username: {account_id}")
 
     # 3. Within that row, find and click the "editor" button in the first cell
@@ -27,7 +27,7 @@ def click_recharge_for_account(page: Page, account_id: str, logger):
         editor_btn.wait_for(timeout=5_000)
         editor_btn.click()
     except PlaywrightTimeoutError:
-        logger.error(f"❌ No editor button found for Username: {account_id}")
+        logger.exception(f"❌ No editor button found for Username: {account_id}")
         raise Exception(f"<UNK> No editor button found for Username: {account_id}")
 
     # 4. Wait for the global "Recharge" button to appear and click it
@@ -38,7 +38,7 @@ def click_recharge_for_account(page: Page, account_id: str, logger):
     except PlaywrightTimeoutError:
         raise Exception("❌ Timeout while waiting for the Recharge button.")
 
-    logger.info(f"✅ Clicked recharge button for Username: {account_id}")
+    logger.debug(f"✅ Clicked recharge button for Username: {account_id}")
 
 
 def click_redeem_for_account(page: Page, account_id: str, logger):
@@ -59,7 +59,7 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
     try:
         row.wait_for(timeout=5_000)
     except PlaywrightTimeoutError:
-        logger.warning(f"⚠️ No row matched Username: {account_id}")
+        logger.exception(f"⚠️ No row matched Username: {account_id}")
         raise Exception(f"<UNK> No row matched Username: {account_id}")
 
     # 3. Within that row, find and click the "editor" button in the first cell
@@ -68,7 +68,7 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
         editor_btn.wait_for(timeout=5_000)
         editor_btn.click()
     except PlaywrightTimeoutError:
-        logger.error(f"❌ No editor button found for Username: {account_id}")
+        logger.exception(f"❌ No editor button found for Username: {account_id}")
         raise Exception(f"<UNK> No editor button found for Username: {account_id}")
 
     # 4. Wait for the global "Recharge" button to appear and click it
@@ -79,4 +79,4 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
     except PlaywrightTimeoutError:
         raise Exception("❌ Timeout while waiting for the Redeem button.")
 
-    logger.info(f"✅ Clicked redeem button for Username: {account_id}")
+    logger.debug(f"✅ Clicked redeem button for Username: {account_id}")

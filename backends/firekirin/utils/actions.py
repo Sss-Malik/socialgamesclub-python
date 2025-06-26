@@ -22,4 +22,4 @@ def click_update_for_account(main_frame, account_id: str, logger):
         raise Exception(f"Update button not found in row for account ID: {account_id}")
 
     update_btn.click()
-    logger.info(f"✅ Clicked update button for account ID: {account_id}")
+    logger.debug(f"✅ Clicked update button for account ID: {account_id}")

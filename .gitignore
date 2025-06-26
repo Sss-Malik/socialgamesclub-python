@@ -9,3 +9,5 @@ created_players.txt
 
 __pycache__/
 *.pyc
+
+.env

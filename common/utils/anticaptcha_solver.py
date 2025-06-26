@@ -11,7 +11,7 @@ def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeou
 
         # Capture CAPTCHA image
         captcha_img_el.screenshot(type="png", path=str(img_path))
-        logger.info(f"Captcha screenshot saved to {img_path}")
+        logger.debug(f"Captcha screenshot saved to {img_path}")
 
         # Initialize solver
         solver = imagecaptcha()
@@ -24,13 +24,11 @@ def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeou
         # Solve CAPTCHA
         captcha_text = solver.solve_and_return_solution(str(img_path))
 
-        if captcha_text == 0:
-            logger.error("Captcha solver failed to return a valid solution.")
 
         # Return both solution and solver object
         return captcha_text, solver
 
     except Exception as e:
-        logger.exception(f"Exception occurred while solving captcha: {e}")
+        logger.critical(f"Exception occurred while solving captcha: {e}", exc_info=True)
         return 0, None
 
