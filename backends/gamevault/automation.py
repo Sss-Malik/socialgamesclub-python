@@ -12,6 +12,8 @@ from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
 
+from settings import APP_ENV, HEADLESS, DEBUG
+
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
@@ -30,13 +32,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        if not text or text == 0:
-            logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
-            page.reload(wait_until="domcontentloaded")
-            continue
+        if DEBUG:
+            input("Debug mode activated. Press Enter to continue...")
+        else:
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+            if not text or text == 0:
+                logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
+                page.reload(wait_until="domcontentloaded")
+                continue
 
-        cap.fill(text)
+            cap.fill(text)
         btn.click()
 
         try:
@@ -151,6 +156,9 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
     page.locator("//label[text()='Recharge Amount']/following-sibling::div//input")\
         .fill(str(amount))
 
+    if DEBUG:
+        input("Debug mode activated. Press Enter to continue...")
+
     # confirm dialog
     dlg = page.locator("div.el-dialog",
                       has=page.locator("span.el-dialog__title", has_text="Please confirm your recharge & details!"))
@@ -203,6 +211,9 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
     dlg.locator("//label[text()='Redeem Amount']/following-sibling::div//input")\
         .fill(str(amount))
 
+    if DEBUG:
+        input("Debug mode activated. Press Enter to continue...")
+
     confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
     confirm_btn.wait_for(state="visible", timeout=10_000)
     confirm_btn.click()
@@ -235,7 +246,7 @@ def action_create_account(count: int):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -278,7 +289,7 @@ def action_recharge_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -318,7 +329,7 @@ def action_withdraw_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -358,7 +369,7 @@ def action_read_account(account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",

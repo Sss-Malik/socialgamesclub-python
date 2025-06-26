@@ -10,6 +10,8 @@ from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 
+from settings import APP_ENV, HEADLESS, DEBUG
+
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.info("Navigating to login page: %s", LOGIN_URL)
 
@@ -27,14 +29,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         password_input.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+        if DEBUG:
+            input("Debug mode activated. Solve CAPTCHA manually and press enter to proceed")
+        else:
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+            if not text or text == 0:
+                logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
+                page.reload(wait_until="domcontentloaded")
+                continue
+            captcha_input.fill(text)
 
-        if not text or text == 0:
-            logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
-            page.reload(wait_until="domcontentloaded")
-            continue
-
-        captcha_input.fill(text)
         login_button.click()
 
         try:
@@ -104,6 +108,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
     recharge = page.frame_locator('iframe[src*="AccountManager"]')
     recharge.locator("input#txtAddGold").fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated; press enter to continue...")
+
     recharge.locator('input[type="button"][value="Recharge"]').click()
 
     page.locator("#mb_con").wait_for(timeout=5_000)
@@ -137,6 +145,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         return
 
     redeem.locator("input#txtAddGold").fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated; press enter to continue...")
+
     redeem.locator('input[type="button"][value="Redeem"]').click()
 
     page.locator("#mb_con").wait_for(timeout=10_000)
@@ -179,7 +191,7 @@ def action_create_account(count: int):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -220,7 +232,7 @@ def action_recharge_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -258,7 +270,7 @@ def action_withdraw_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -296,7 +308,7 @@ def action_read_account(account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",

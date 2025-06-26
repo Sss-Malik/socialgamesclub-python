@@ -12,6 +12,7 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
 
+from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
@@ -28,13 +29,17 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        if not text or text == 0:
-            logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
-            page.reload(wait_until="domcontentloaded")
-            continue
+        if DEBUG:
+            input("Debug mode activated. Press Enter to continue...")
+        else:
 
-        cap_in.fill(text)
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+            if not text or text == 0:
+                logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
+                page.reload(wait_until="domcontentloaded")
+                continue
+
+            cap_in.fill(text)
         btn.click()
         try:
             # look for “incorrect” banner
@@ -120,6 +125,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     withdraw_iframe = main_iframe.frame_locator('iframe[src*="withdraw"]')
 
     withdraw_iframe.locator("div.layui-form-item:has(label:text('Withdraw Balance')) input").fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated. Press Enter to continue...")
+
     withdraw_iframe.locator("button:has-text('Submit')").click()
 
     # wait for confirmation
@@ -186,6 +195,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     # fill & submit recharge form
     recharge_iframe = main_iframe.frame_locator('iframe[src*="recharge"]')
     recharge_iframe.locator('input[name="balance"]').fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated. Press enter to continue...")
+
     recharge_iframe.locator("button:has-text('Submit')").click()
 
     # wait for confirmation
@@ -212,7 +225,7 @@ def action_create_account(count: int):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -256,7 +269,7 @@ def action_recharge_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -296,7 +309,7 @@ def action_withdraw_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -336,7 +349,7 @@ def action_read_account(account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",

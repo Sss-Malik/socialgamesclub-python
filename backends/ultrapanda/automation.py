@@ -10,6 +10,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 
+from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.info("Navigating to login page: %s", LOGIN_URL)
@@ -113,6 +114,8 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         inp.wait_for(timeout=5_000, state="visible")
         inp.fill(str(points))
 
+        if DEBUG:
+            input("Debug mode activated. Press enter to continue...")
 
         # confirm
         page.locator(
@@ -218,6 +221,9 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
         inp.wait_for(timeout=5_000, state="visible")
         inp.fill(f"-{str(points)}")
 
+        if DEBUG:
+            input("Debug mode activated. Press enter to continue...")
+
         # confirm
         page.locator(
             "//div[contains(@class,'el-form-item__content') and .//span[text()='Cancel']]//span[text()='OK']"
@@ -247,7 +253,7 @@ def action_create_account(count: int):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -288,7 +294,7 @@ def action_recharge_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -327,7 +333,7 @@ def action_withdraw_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -365,7 +371,7 @@ def action_read_account(account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",

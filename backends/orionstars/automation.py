@@ -14,6 +14,7 @@ from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 
+from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
     logger.info("Navigating to login page: %s", LOGIN_URL)
@@ -32,13 +33,17 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
-        text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
-        if not text or text == 0:
-            logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
-            page.reload(wait_until="domcontentloaded")
-            continue
+        if DEBUG:
+            input("Debug mode activated. Press Enter to continue...")
+        else:
 
-        cap.fill(text)
+            text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
+            if not text or text == 0:
+                logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
+                page.reload(wait_until="domcontentloaded")
+                continue
+
+            cap.fill(text)
         btn.click()
 
         try:
@@ -110,6 +115,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     # Fill the recharge amount
     recharge = page.frame_locator('iframe[src*="AccountManager"]')
     recharge.locator("input#txtAddGold").fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated. Press Enter to continue...")
+
     recharge.locator('input[type="button"][value="Recharge"]').click()
 
     # Check result
@@ -180,6 +189,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         return
 
     redeem.locator("input#txtAddGold").fill(str(count))
+
+    if DEBUG:
+        input("Debug mode activated. Press Enter to continue...")
+
     redeem.locator('input[type="button"][value="Redeem"]').click()
 
     # feedback
@@ -201,7 +214,7 @@ def action_create_account(count: int):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -242,7 +255,7 @@ def action_recharge_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -282,7 +295,7 @@ def action_withdraw_account(count: int, account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
@@ -321,7 +334,7 @@ def action_read_account(account_id: str):
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=HEADLESS,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--start-maximized",
