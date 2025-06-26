@@ -25,7 +25,7 @@ def click_recharge_for_account(main_frame, account_id: str, logger):
         raise Exception(f"Recharge button not found in row for account ID: {account_id}")
 
     button.click()
-    logger.info(f"✅ Clicked recharge button for Username: {account_id}")
+    logger.debug(f"✅ Clicked recharge button for Username: {account_id}")
 
 
 def click_withdraw_for_account(main_frame, account_id: str, logger):
@@ -53,5 +53,5 @@ def click_withdraw_for_account(main_frame, account_id: str, logger):
         raise Exception(f"Withdraw button not found in row for account ID: {account_id}")
 
     button.click()
-    logger.info(f"✅ Clicked withdraw button for Username: {account_id}")
+    logger.debug(f"✅ Clicked withdraw button for Username: {account_id}")
 

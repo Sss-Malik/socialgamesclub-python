@@ -13,7 +13,7 @@ from common.utils.save_credentials import save_credentials
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
-    logger.info("🚀 Navigating to login page: %s", LOGIN_URL)
+    logger.info("Navigating to login page: %s", LOGIN_URL)
     page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
     page.locator(LOGIN_ACCOUNT).fill(USERNAME)
@@ -21,13 +21,14 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
     page.locator(LOGIN_BUTTON).click()
 
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=20_000)
-    logger.info("✅ Login successful.")
-
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+    logger.info("✅ Login and navigation successful.")
+
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
-    # open the “create account” form
+    logger.debug("Initiating create account dialog.")
+
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=15_000)
 
     page.locator(ACCOUNT_BALANCE).fill("0")
@@ -51,13 +52,13 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    # search for user
+    logger.debug(f"Starting recharge for account: {account_id} with count: {count}")
+
     acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
     acc_sr.wait_for(timeout=15_000)
     acc_sr.fill(account_id)
     page.locator('button:has-text("Search")').click()
 
-    # delegate to existing helper
     click_purchase_for_account(page, account_id, logger)
     page.wait_for_timeout(2_000)
 
@@ -67,14 +68,11 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     amt_input = modal.locator("input#modal-deposite-amount")
     amt_input.wait_for(timeout=5_000)
     amt_input.fill(str(count))
-    logger.info("✅ Filled deposit amount with: %d", count)
-
-    # debug pause
-    input("🔍 Press Enter to continue (e.g., after verifying inputs)…")
+    logger.debug("✅ Filled deposit amount with: %d", count)
 
     # click Purchase
     modal.locator("input.btn.btn-primary[type='submit'][value='Purchase']").click()
-    logger.info("✅ Clicked Purchase button in modal.")
+    logger.debug("✅ Clicked Purchase button in modal.")
 
     try:
         page.wait_for_load_state("networkidle", timeout=15_000)
@@ -91,20 +89,20 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
     # 3) Branch on which one it is
     if alert.get_attribute("class").split().count("alert-error"):
-        logger.error("❌ Purchase failed: %s", text)
         if "not enough credits" in text:
-            logger.info("⚠️ Account has insufficient credits.")
+            logger.error("⚠️ Account has insufficient credits.")
     elif alert.get_attribute("class").split().count("alert-success"):
         if "amount added" in text:
-            logger.info("✅ Purchase completed successfully: %s", text)
+            logger.info("✅ Purchase completed successfully")
         else:
             logger.info("ℹ️ Purchase succeeded with message: %s", text)
     else:
-        # in the extremely unlikely event it matched neither class…
         logger.warning("⚠️ Matched an alert, but unknown type: %s", text)
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    logger.debug(f"Reading account: {account_id}")
+
     acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
     acc_sr.wait_for(timeout=15_000)
     acc_sr.fill(account_id)
@@ -132,7 +130,8 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    # search for user
+    logger.debug(f"Starting withdraw for account: {account_id} with count: {count}")
+
     acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
     acc_sr.wait_for(timeout=15_000)
     acc_sr.fill(account_id)
@@ -148,14 +147,11 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     amt_input = modal.locator("input#modal-withdrawal-amount")
     amt_input.wait_for(timeout=5_000)
     amt_input.fill(str(count))
-    logger.info("✅ Filled withdrawal amount with: %d", count)
-
-    # debug pause
-    input("🔍 Press Enter to continue (e.g., after verifying inputs)…")
+    logger.debug("✅ Filled withdrawal amount with: %d", count)
 
     # click Purchase
     modal.locator("input.btn.btn-primary[type='submit'][value='Redeem']").click()
-    logger.info("✅ Clicked Purchase button in modal.")
+    logger.debug("✅ Clicked Purchase button in modal.")
 
     try:
         page.wait_for_load_state("networkidle", timeout=15_000)
@@ -172,7 +168,6 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
 
     # 3) Branch on which one it is
     if alert.get_attribute("class").split().count("alert-error"):
-        logger.error("❌ Redeem failed: %s", text)
         if "not enough credits" in text:
             logger.info("⚠️ Customer has insufficient credits.")
     elif alert.get_attribute("class").split().count("alert-success"):
@@ -192,29 +187,39 @@ def action_create_account(count: int):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            context = browser.new_context()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
             page = context.new_page()
 
             _login_and_navigate(page, logger)
             for i in range(count):
                 logger.info("➡️ Creating account #%d of %d", i+1, count)
-                try:
-                    _create_single_account(page, logger)
-                except Exception as e:
-                    logger.exception("❌ Error creating account #%d: %s", i+1, e)
-
-                # reload back to management page
-                try:
-                    page.reload(wait_until="domcontentloaded")
-                except Exception as e:
-                    logger.warning("⚠️ Failed to reload page: %s", e)
+                _create_single_account(page, logger)
+                page.reload(wait_until="domcontentloaded")
 
             browser.close()
-    except Exception as e:
-        logger.exception("🔥 Fatal error in account creation: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account creation: %s", e, exc_info=True)
     finally:
-        logger.info("==== Finished account creation ====")
+        logger.info("Create-account action completed.")
 
 
 def action_recharge_account(count: int, account_id: str):
@@ -224,18 +229,35 @@ def action_recharge_account(count: int, account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            context = browser.new_context()
-            page = context.new_page()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
 
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
 
             browser.close()
-    except Exception as e:
-        logger.exception("🔥 Error during recharge process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account recharge: %s", e, exc_info=True)
     finally:
-        logger.info("===== Topup process finished =====")
+        logger.info("Recharge-account action completed.")
 
 
 def action_withdraw_account(count: int, account_id: str):
@@ -245,18 +267,36 @@ def action_withdraw_account(count: int, account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            context = browser.new_context()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
             page = context.new_page()
 
             _login_and_navigate(page, logger)
             _withdraw_account(page, logger, count, account_id)
 
             browser.close()
-    except Exception as e:
-        logger.exception("🔥 Error during withdraw process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account withdrawal: %s", e, exc_info=True)
     finally:
-        logger.info("===== Withdraw process finished =====")
+        logger.info("===== Withdraw-account action completed =====")
 
 def action_read_account(account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -265,15 +305,33 @@ def action_read_account(account_id: str):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            context = browser.new_context()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
             page = context.new_page()
 
             _login_and_navigate(page, logger)
             _read_account(page, logger, account_id)
 
             browser.close()
-    except Exception as e:
-        logger.exception("🔥 Error during read process: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account read: %s", e, exc_info=True)
     finally:
         logger.info("===== Read process finished =====")

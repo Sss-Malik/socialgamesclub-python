@@ -34,5 +34,5 @@ def click_set_score(page: Page, account_id: str, logger: logging.Logger) -> bool
         raise Exception(f'"Set Score" button not found for account_id="{account_id}"')
 
     btn.click()
-    logger.info(f'✅ Successfully clicked "Set Score" for account_id="{account_id}"')
+    logger.debug(f'✅ Successfully clicked "Set Score" for account_id="{account_id}"')
     return True

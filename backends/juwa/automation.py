@@ -24,24 +24,24 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
     login_btn = page.locator(LOGIN_BUTTON)
 
     for attempt in range(MAX_CAPTCHA_RETRIES):
-        logger.debug(f"Login attempt #{attempt+1}")
+        logger.debug(f"Login attempt #{attempt + 1}")
+
         acct.fill(USERNAME)
         pwd.fill(PASSWORD)
 
         logger.debug("Solving CAPTCHA…")
         text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
         if not text or text == 0:
+            logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
             page.reload(wait_until="domcontentloaded")
             continue
 
         cap_in.fill(text)
-        if DEBUG:
-            input("DEBUG: Complete CAPTCHA on screen, then press Enter…")
 
         login_btn.click()
 
         try:
-            page.locator("div.el-message-box", has_text="incorrect").wait_for(timeout=3_000)
+            page.locator("div.el-message-box", has_text="incorrect").wait_for(timeout=5000)
             logger.warning("❗ CAPTCHA incorrect, retrying…")
             solver.report_incorrect_image_captcha()
             page.reload(wait_until="domcontentloaded")
@@ -49,19 +49,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
             logger.info("No CAPTCHA-error message, proceeding.")
             break
 
+    logger.debug("Waiting for main page element after login.")
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-    logger.info("Login successful.")
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+    logger.info("Login and navigation successful.")
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
+    logger.debug("Initiating create account dialog.")
     while True:
-        logger.debug("Opening create-account form")
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials(BACKEND_SIGNATURE)
-        logger.info("Generated credentials: %s / [REDACTED]", account_id)
+        logger.debug(f"Generated credentials: {account_id} / {password}")
 
         page.locator(ACCOUNT_ID).fill(account_id)
         page.locator(ACCOUNT_PASSWORD).fill(password)
@@ -102,16 +104,17 @@ def _create_single_account(page: Page, logger: logging.Logger):
                     logger.debug("🧹 Closed 'Essential information' dialog.")
                     continue
                 else:
-                    logger.warning("⚠️ 'Essential information' dialog close button not visible.")
+                    logger.debug("⚠️ 'Essential information' dialog close button not visible.")
                     page.got(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
                 page.wait_for_timeout(1000)
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ Timeout occurred in account creation.")
+            logger.exception("⚠️ Timeout occurred in account creation.")
             break
 
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    logger.debug("Searching for account to recharge: %s", account_id)
+    logger.debug(f"Starting recharge for account: {account_id} with count: {count}")
+
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
@@ -124,8 +127,6 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     recharge_inp.wait_for(timeout=15_000)
     recharge_inp.fill(str(count))
 
-    if DEBUG:
-        input("DEBUG: review recharge amount, then press Enter…")
 
     dlg = page.locator(
         "div.el-dialog",
@@ -147,7 +148,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             if msg.is_visible():
                 text = msg.inner_text().strip().lower()
                 if "not enougn balance" in text:
-                    logger.warning("Insufficient balance")
+                    logger.error("Insufficient balance")
                     return
                 if "success" in text:
                     logger.info(f"✅ Account deposit successfully detected: {text}")
@@ -157,6 +158,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
+    logger.debug(f"Reading account: {account_id}")
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
@@ -181,7 +183,8 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     logger.info("✅ Extracted row data: %s", data)
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    logger.debug("Searching for account to withdraw: %s", account_id)
+    logger.debug(f"Starting withdraw for account: {account_id} with count: {count}")
+
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
@@ -197,10 +200,6 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     )
     redeem_input.wait_for(timeout=15_000)
     redeem_input.fill(str(count))
-
-    if DEBUG:
-        input("DEBUG: review recharge amount, then press Enter…")
-
 
     confirm_btn = dlg.locator(
         ".el-dialog__footer button.el-button--primary",
@@ -218,7 +217,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             if msg.is_visible():
                 text = msg.inner_text().strip().lower()
                 if "the redeem amount can not be greater than the balance on the body！" in text:
-                    logger.warning("⚠️ Customer balance insufficient")
+                    logger.error("⚠️ Customer balance insufficient")
                     return
                 if "success" in text:
                     logger.info(f"✅ Account withdraw successful")
@@ -233,12 +232,31 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
 def action_create_account(count: int):
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("==== Starting account creation (%d accounts) ====", count)
+    logger.info("Create-account action started for %d accounts.", count)
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             for i in range(count):
@@ -247,74 +265,125 @@ def action_create_account(count: int):
                 page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
             browser.close()
-    except PlaywrightTimeoutError as te:
-        logger.exception("⏳ Timeout during account creation: %s", te)
-    except Exception as e:
-        logger.exception("❌ Fatal error in account creation: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account creation: %s", e, exc_info=True)
     finally:
-        logger.info("==== Finished account creation ====")
+        logger.info("Create-account action completed.")
 
 
 def action_recharge_account(count: int, account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
+    logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as e:
-        logger.exception("⏳ Timeout during recharge flow: %s", e)
-    except Exception as e:
-        logger.exception("❌ Error during recharge flow: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account recharge: %s", e, exc_info=True)
     finally:
-        logger.info("===== Finished recharge process =====")
+        logger.info("Recharge-account action completed.")
 
 
 def action_withdraw_account(count: int, account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting recharge: %s → %d =====", account_id, count)
+    logger.info("Withdraw-account action started: account_id=%s, count=%d", account_id, count)
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _withdraw_account(page, logger, count, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as e:
-        logger.exception("⏳ Timeout during recharge flow: %s", e)
-    except Exception as e:
-        logger.exception("❌ Error during recharge flow: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account withdrawal: %s", e, exc_info=True)
     finally:
-        logger.info("===== Finished recharge process =====")
+        logger.info("Withdraw-account action completed.")
+
 
 def action_read_account(account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting read: %s =====", account_id)
+    logger.info("Read-account action started: account_id=%s", account_id)
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
-            page = browser.new_context().new_page()
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--start-maximized",
+                    "--no-sandbox",
+                ]
+            )
+
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="en-US",
+                color_scheme="light",
+            )
+
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            page = context.new_page()
 
             _login_and_navigate(page, logger)
             _read_account(page, logger, account_id)
 
             browser.close()
-    except PlaywrightTimeoutError as e:
-        logger.exception("⏳ Timeout during read flow: %s", e)
-    except Exception as e:
-        logger.exception("❌ Error during read flow: %s", e)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account read: %s", e, exc_info=True)
     finally:
-        logger.info("===== Finished read process =====")
+        logger.info("Read-account action completed.")
+

@@ -10,13 +10,13 @@ def handle_captcha(page, logger: logging.Logger, captcha_img, save_dir, timeout=
         text, solver = solve_captcha(captcha_el, save_dir, logger)
 
         if isinstance(text, str) and text:
-            logger.info("CAPTCHA returned as: %s", text)
+            logger.debug("CAPTCHA returned as: %s", text)
             return text, solver  # Return solver for later reporting
         else:
-            logger.warning("Solver returned invalid text: %s", text)
+            logger.debug("Solver returned invalid text: %s", text)
             return text, solver  # Still return solver to potentially report
     except PlaywrightTimeoutError:
-        logger.info("No CAPTCHA found within timeout (%sms).", timeout)
+        logger.exception("No CAPTCHA found within timeout (%sms).", timeout)
     except Exception as e:
         logger.exception("Unexpected CAPTCHA handling error: %s", e)
     return 0, None
