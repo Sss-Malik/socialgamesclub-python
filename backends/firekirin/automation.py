@@ -9,13 +9,19 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
+from common.utils.db_actions import get_backend
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
-    logger.info("Navigating to login page: %s", LOGIN_URL)
+    logger.info("Fetching backend details from db...")
+    backend = get_backend(BACKEND_NAME)
+    username = backend.get("username") or USERNAME
+    password = backend.get("password") or PASSWORD
+    login_url = backend.get("backend_url") or LOGIN_URL
 
-    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    logger.info("Navigating to login page: %s", LOGIN_URL)
+    page.goto(login_url, wait_until="domcontentloaded")
 
 
     account_input = page.locator(LOGIN_ACCOUNT)
@@ -25,8 +31,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
 
     for attempt in range(MAX_CAPTCHA_RETRIES):
         logger.debug(f"Login attempt #{attempt + 1}")
-        account_input.fill(USERNAME)
-        password_input.fill(PASSWORD)
+        account_input.fill(username)
+        password_input.fill(password)
 
         logger.debug("Solving CAPTCHA…")
         if DEBUG:

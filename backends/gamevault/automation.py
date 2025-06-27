@@ -11,14 +11,21 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
+from common.utils.db_actions import get_backend
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
+    logger.info("Fetching backend details from db...")
+    backend = get_backend(BACKEND_NAME)
+    username = backend.get("username") or USERNAME
+    password = backend.get("password") or PASSWORD
+    login_url = backend.get("backend_url") or LOGIN_URL
+
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
-    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    page.goto(login_url, wait_until="domcontentloaded")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
@@ -28,8 +35,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
     for attempt in range(MAX_CAPTCHA_RETRIES):
         logger.debug(f"Login attempt #{attempt + 1}")
 
-        acct.fill(USERNAME)
-        pwd.fill(PASSWORD)
+        acct.fill(username)
+        pwd.fill(password)
 
         logger.debug("Solving CAPTCHA…")
         if DEBUG:

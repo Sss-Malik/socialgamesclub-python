@@ -10,15 +10,23 @@ from backends.river.utils.actions import click_redeem_for_account
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
+from common.utils.db_actions import get_backend
+
 from settings import APP_ENV, HEADLESS, DEBUG
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
-    logger.info("Navigating to login page: %s", LOGIN_URL)
-    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    logger.info("Fetching backend details from db...")
+    backend = get_backend(BACKEND_NAME)
+    username = backend.get("username") or USERNAME
+    password = backend.get("password") or PASSWORD
+    login_url = backend.get("backend_url") or LOGIN_URL
 
-    page.locator(LOGIN_ACCOUNT).fill(USERNAME)
-    page.locator(LOGIN_PASSWORD).fill(PASSWORD)
+    logger.info("Navigating to login page: %s", LOGIN_URL)
+    page.goto(login_url, wait_until="domcontentloaded")
+
+    page.locator(LOGIN_ACCOUNT).fill(username)
+    page.locator(LOGIN_PASSWORD).fill(password)
     page.locator(LOGIN_BUTTON).click()
 
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=20_000)
