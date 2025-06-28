@@ -1,9 +1,9 @@
 import importlib
 import inspect
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, Header
 from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
 import logging
-
+from settings import APP_KEY
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
@@ -37,8 +37,15 @@ def _invoke_action(backend: str, action: str, **kwargs):
 @app.post("/automation/create-account")
 async def create_account(
     req: CreateAccountRequest,
-    bg: BackgroundTasks
+    bg: BackgroundTasks,
+    x_app_key: str = Header(None)
 ):
+    if x_app_key != APP_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid APP_KEY"
+        )
+
     """
     Schedule create-account action: params = backend, count
     """
@@ -48,8 +55,15 @@ async def create_account(
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
-    bg: BackgroundTasks
+    bg: BackgroundTasks,
+    x_app_key: str = Header(None)
 ):
+    if x_app_key != APP_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid APP_KEY"
+        )
+
     """
     Schedule recharge-account action: backend, count, account_id
     """
@@ -65,8 +79,16 @@ async def recharge_account(
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
         req: WithdrawAccountRequest,
-        bg: BackgroundTasks
+        bg: BackgroundTasks,
+        x_app_key: str = Header(None)
 ):
+
+    if x_app_key != APP_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid APP_KEY"
+        )
+
     bg.add_task(
         _invoke_action,
         req.backend,
@@ -79,8 +101,15 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
         req: ReadAccountRequest,
-        bg: BackgroundTasks
+        bg: BackgroundTasks,
+        x_app_key: str = Header(None)
 ):
+    if x_app_key != APP_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid APP_KEY"
+        )
+
     bg.add_task(
         _invoke_action,
         req.backend,
