@@ -2,6 +2,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "gameroom"
+BACKEND_ID = 2
 DEBUG = True
 BACKEND_SIGNATURE = "GR"
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "orionstars"
+BACKEND_ID = 6
 DEBUG = True
 BACKEND_SIGNATURE = "OS"
 
