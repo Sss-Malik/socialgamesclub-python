@@ -49,7 +49,7 @@ async def create_account(
     """
     Schedule create-account action: params = backend, count
     """
-    bg.add_task(_invoke_action, req.backend, "create-account", count=req.count)
+    bg.add_task(_invoke_action, req.backend, "create-account")
     return {"status": "scheduled", **req.dict(), "action": "create-account"}
 
 @app.post("/automation/recharge-account")
