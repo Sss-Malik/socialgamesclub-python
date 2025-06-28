@@ -2,6 +2,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "juwa"
+BACKEND_ID = 4
 DEBUG = True
 BACKEND_SIGNATURE = "JW"
 

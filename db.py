@@ -1,60 +1,20 @@
-import mysql.connector
-from mysql.connector import Error
+# casino_automation/db.py
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session, declarative_base
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_connection():
-    try:
-        connection = mysql.connector.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASS")
-        )
-        return connection
-    except Error as e:
-        print(f"[DB ERROR] {e}")
-        return None
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS").strip('"')
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", 3306)
+DB_NAME = os.getenv("DB_NAME")
 
+SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-def execute_query(query, params=None):
-    connection = get_connection()
-    if connection is None:
-        raise Exception("Database connection failed.")
-    cursor = connection.cursor(dictionary=True)
-    try:
-        cursor.execute(query, params or ())
-        connection.commit()
-        return cursor.lastrowid
-    finally:
-        cursor.close()
-        connection.close()
+engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
+SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
-
-def fetch_all(query, params=None):
-    connection = get_connection()
-    if connection is None:
-        raise Exception("Database connection failed.")
-    cursor = connection.cursor(dictionary=True)
-    try:
-        cursor.execute(query, params or ())
-        return cursor.fetchall()
-    finally:
-        cursor.close()
-        connection.close()
-
-
-def fetch_one(query, params=None):
-    connection = get_connection()
-    if connection is None:
-        raise Exception("Database connection failed.")
-    cursor = connection.cursor(dictionary=True)
-    try:
-        cursor.execute(query, params or ())
-        return cursor.fetchone()
-    finally:
-        cursor.close()
-        connection.close()
+Base = declarative_base()

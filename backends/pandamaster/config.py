@@ -3,6 +3,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "pandamaster"
+BACKEND_ID = 7
 DEBUG = True
 BACKEND_SIGNATURE = "PM"
 
