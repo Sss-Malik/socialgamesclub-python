@@ -11,7 +11,7 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
 
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -140,7 +140,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     ).first
 
     row.wait_for(timeout=5000)
-
+    backend_account_id = row.locator("td:nth-child(2) .cell").inner_text().strip()
     data = {
         "id": row.locator("td:nth-child(2) .cell").inner_text().strip(),
         "account": row.locator("td:nth-child(4) .cell").inner_text().strip(),
@@ -150,7 +150,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         "last_login": row.locator("td:nth-child(10) .cell").inner_text().strip(),
         "last_login_ip": row.locator("td:nth-child(11) .cell").inner_text().strip(),
     }
-
+    update_game_id_by_username(account_id, backend_account_id)
     logger.info("✅ Extracted row data: %s", data)
 
 

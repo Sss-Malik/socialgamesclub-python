@@ -11,7 +11,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
@@ -179,7 +179,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     ).first
 
     row.wait_for(timeout=5000)
-
+    backend_account_id = row.locator("td[data-field='Id']").inner_text().strip()
     data = {
         "id": row.locator("td[data-field='Id']").inner_text().strip(),
         "account": row.locator("td[data-field='Account']").inner_text().strip(),
@@ -191,6 +191,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         "last_login_ip": row.locator("td[data-field='loginip']").inner_text().strip(),
     }
     logger.info("✅ Extracted row data: %s", data)
+    update_game_id_by_username(account_id, backend_account_id)
 
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):

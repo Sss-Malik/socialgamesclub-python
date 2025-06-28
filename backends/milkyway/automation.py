@@ -11,7 +11,7 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
 
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -159,6 +159,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     row.wait_for(timeout=5000)
     if row.is_visible():
         logger.info(f"<UNK> Account successfully read.")
+        backend_account_id = row.locator("td:nth-child(2)").inner_text().strip()
         data = {
             "account_id": row.locator("td:nth-child(3)").inner_text().strip(),
             "nickname": row.locator("td:nth-child(4)").inner_text().strip(),
@@ -168,6 +169,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
             "manager": row.locator("td:nth-child(8)").inner_text().strip(),
             "status": row.locator("td:nth-child(9)").inner_text().strip(),
         }
+        update_game_id_by_username(account_id, backend_account_id)
         logger.info("Extracted account data: %s", data)
 
 
