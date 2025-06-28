@@ -14,9 +14,8 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
-def _login_and_navigate(page: Page, logger: logging.Logger):
+def _login_and_navigate(page: Page, logger: logging.Logger, backend):
     logger.info("Fetching backend details from db...")
-    backend = get_backend(BACKEND_NAME)
     username = backend.username or USERNAME
     password = backend.password or PASSWORD
     login_url = backend.backend_url or LOGIN_URL
@@ -73,7 +72,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
                         break
                     else:
                         logger.info("ℹ️ Unhandled but visible message: %r", text)
-                        insert_log("warning", f"Unexpected create account response: {text}")
+                        insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url))
             if success:
                 break
             if should_restart:
@@ -144,10 +143,10 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             elif "sucessful operation" in text:
                 logger.info("Account successfully recharged.")
             else:
-                insert_log("warning", f"Unexpected recharge response: {text} for account: {account_id}")
+                insert_log("warning", f"Unexpected recharge response: {text} for account: {account_id}", source_url=str(page.url))
         except PlaywrightTimeoutError:
             logger.exception("⚠️ No dialog appeared after setting score.")
-            insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}")
+            insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
         break
 
 
@@ -254,15 +253,17 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 logger.info("Account successfully redeemed.")
                 return
             else:
-                insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}")
+                insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}", source_url=str(page.url))
         except PlaywrightTimeoutError:
             logger.exception("⚠️ No dialog appeared after setting score.")
-            insert_log("warning", f"Failed to detect dialog after withdraw for account: {account_id}")
+            insert_log("warning", f"Failed to detect dialog after withdraw for account: {account_id}", source_url=str(page.url))
         break
 
 
 
-def action_create_account(count: int):
+def action_create_account():
+    backend = get_backend(BACKEND_NAME)
+    count = int(backend.accounts_creation_pd)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("==== Starting account creation (%d accounts) ====", count)
@@ -290,9 +291,9 @@ def action_create_account(count: int):
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.")
+            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
-            _login_and_navigate(page, logger)
+            _login_and_navigate(page, logger, backend)
             for i in range(count):
                 logger.info("➡️ Creating account #%d of %d", i + 1, count)
                 _create_single_account(page, logger)
@@ -303,10 +304,11 @@ def action_create_account(count: int):
         insert_log("error", f"Error during account creation: {e}", source_url=str(page.url))
     finally:
         logger.info("Create-account action completed.")
-        insert_log("info", "Create account action completed")
+        insert_log("info", "Create account action completed", source_url=str(page.url))
 
 
 def action_recharge_account(count: int, account_id: str):
+    backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("===== Starting score‐set action: %s → %d count =====", account_id, count)
@@ -334,9 +336,9 @@ def action_recharge_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.")
+            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
-            _login_and_navigate(page, logger)
+            _login_and_navigate(page, logger, backend)
             _recharge_account(page, logger, count, account_id)
 
             browser.close()
@@ -345,10 +347,11 @@ def action_recharge_account(count: int, account_id: str):
         insert_log("error", f"Error during account recharge: {e}", source_url=str(page.url))
     finally:
         logger.info("Recharge-account action completed.")
-        insert_log("info", "Recharge account action completed")
+        insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
 
 def action_withdraw_account(count: int, account_id: str):
+    backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("===== Starting redeem action: %s → %d count =====", account_id, count)
@@ -376,9 +379,9 @@ def action_withdraw_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.")
+            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
-            _login_and_navigate(page, logger)
+            _login_and_navigate(page, logger, backend)
             _withdraw_account(page, logger, count, account_id)
 
             browser.close()
@@ -387,9 +390,10 @@ def action_withdraw_account(count: int, account_id: str):
         insert_log("error", f"Error during account withdrawal: {e}", source_url=str(page.url))
     finally:
         logger.info("===== Withdraw-account action completed =====")
-        insert_log("info", "Withdrawal account action completed")
+        insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
 def action_read_account(account_id: str):
+    backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("===== Starting read action: %s =====", account_id)
@@ -417,10 +421,10 @@ def action_read_account(account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'")
+            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
 
 
-            _login_and_navigate(page, logger)
+            _login_and_navigate(page, logger, backend)
             _read_account(page, logger, account_id)
 
             browser.close()
@@ -429,4 +433,4 @@ def action_read_account(account_id: str):
         insert_log("error", f"Error during account read: {e}", source_url=str(page.url))
     finally:
         logger.info("===== Read-account action completed =====")
-        insert_log("info", "Read account action completed")
+        insert_log("info", "Read account action completed", source_url=str(page.url))
