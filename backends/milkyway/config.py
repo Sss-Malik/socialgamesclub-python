@@ -3,6 +3,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "milkyway"
+BACKEND_ID = 5
 DEBUG = True
 BACKEND_SIGNATURE = "MW"
 

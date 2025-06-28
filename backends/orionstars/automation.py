@@ -13,13 +13,21 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
+
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger):
+    logger.info("Fetching backend details from db...")
+    backend = get_backend(BACKEND_NAME)
+    username = backend.username or USERNAME
+    password = backend.password or PASSWORD
+    login_url = backend.backend_url or LOGIN_URL
+
     logger.info("Navigating to login page: %s", LOGIN_URL)
 
-    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    page.goto(login_url, wait_until="domcontentloaded")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
@@ -29,8 +37,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger):
     for attempt in range(MAX_CAPTCHA_RETRIES):
         logger.debug(f"Login attempt #{attempt + 1}")
 
-        acct.fill(USERNAME)
-        pwd.fill(PASSWORD)
+        acct.fill(username)
+        pwd.fill(password)
 
         logger.debug("Solving CAPTCHA…")
         if DEBUG:
@@ -92,11 +100,13 @@ def _create_single_account(page: Page, logger: logging.Logger):
             continue
         elif "success" in msg:
             logger.info("✅ Account created successfully.")
+            insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
             save_credentials(account_id, password, logger, DATA_DIR)
             page.locator("#mb_btn_ok").click()
             break
         else:
             logger.warning("⚠️ Unexpected message: %r", msg)
+            insert_log("warning", f"Unexpected create account response: {msg}")
             page.locator("#mb_btn_ok").click()
             break
 
@@ -129,10 +139,12 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.info("✅ Account successfully recharged.")
     elif "insufficient" in result:
         logger.warning("⚠️ Backend balance insufficient.")
+        raise Exception("Backend balance insufficient")
     elif "unknown" in result:
         logger.warning("Unknown error.")
     else:
         logger.warning("⚠️ Unknown status message: %r", result)
+        insert_log("warning", f"Unexpected recharge response: {result} for account: {account_id}")
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
@@ -151,6 +163,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         update_btn = row.locator("td:nth-child(1) a")
         update_btn.click()
         page.wait_for_timeout(2000)
+        backend_account_id = row.locator("td:nth-child(2)").inner_text().strip()
         data = {
             "account_id": row.locator("td:nth-child(3)").inner_text().strip(),
             "nickname": row.locator("td:nth-child(4)").inner_text().strip(),
@@ -160,6 +173,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
             "manager": row.locator("td:nth-child(7)").inner_text().strip(),
             "status": row.locator("td:nth-child(8)").inner_text().strip(),
         }
+        update_game_id_by_username(account_id, backend_account_id)
         logger.info("✅ Extracted row data: %s", data)
 
 
@@ -202,8 +216,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.info("✅ Account successfully redeemed.")
     elif "not enough gold" in text:
         logger.error("⚠️ Customer balance insufficient.")
+        raise Exception("Customer balance insufficient")
     else:
         logger.warning("⚠️ Unexpected redeem message: %r", text)
+        insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}")
 
 
 def action_create_account(count: int):
@@ -234,6 +250,7 @@ def action_create_account(count: int):
             )
 
             page = context.new_page()
+            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.")
 
             _login_and_navigate(page, logger)
             for i in range(count):
@@ -244,8 +261,10 @@ def action_create_account(count: int):
             browser.close()
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account creation: %s", e, exc_info=True)
+        insert_log("error", f"Error during account creation: {e}", source_url=str(page.url))
     finally:
         logger.info("Create-account action completed.")
+        insert_log("info", "Create account action completed")
 
 def action_recharge_account(count: int, account_id: str):
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -275,6 +294,7 @@ def action_recharge_account(count: int, account_id: str):
             )
 
             page = context.new_page()
+            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.")
 
             _login_and_navigate(page, logger)
             _recharge_account(page, logger, count, account_id)
@@ -282,8 +302,11 @@ def action_recharge_account(count: int, account_id: str):
             browser.close()
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
+        insert_log("error", f"Error during account recharge: {e}", source_url=str(page.url))
+
     finally:
         logger.info("Recharge-account action completed.")
+        insert_log("info", "Recharge account action completed")
 
 
 def action_withdraw_account(count: int, account_id: str):
@@ -315,6 +338,7 @@ def action_withdraw_account(count: int, account_id: str):
             )
 
             page = context.new_page()
+            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.")
 
             _login_and_navigate(page, logger)
             _withdraw_account(page, logger, count, account_id)
@@ -322,8 +346,10 @@ def action_withdraw_account(count: int, account_id: str):
             browser.close()
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
+        insert_log("error", f"Error during account withdrawal: {e}", source_url=str(page.url))
     finally:
         logger.info("Withdraw-account action completed.")
+        insert_log("info", "Withdrawal account action completed")
 
 
 def action_read_account(account_id: str):
@@ -354,6 +380,7 @@ def action_read_account(account_id: str):
             )
 
             page = context.new_page()
+            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'")
 
             _login_and_navigate(page, logger)
             _read_account(page, logger, account_id)
@@ -361,7 +388,9 @@ def action_read_account(account_id: str):
             browser.close()
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account read: %s", e, exc_info=True)
+        insert_log("error", f"Error during account read: {e}", source_url=str(page.url))
 
     finally:
         logger.info("Read-account action completed.")
+        insert_log("info", "Read account action completed")
 

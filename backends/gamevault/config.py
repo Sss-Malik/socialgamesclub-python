@@ -1,6 +1,7 @@
 from pathlib import Path
 
 BACKEND_NAME = "gamevault"
+BACKEND_ID = 3
 BACKEND_SIGNATURE = "GV"
 DEBUG = True
 MAX_CAPTCHA_RETRIES = 5
