@@ -25,7 +25,20 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
 
     page.locator(LOGIN_ACCOUNT).fill(username)
     page.locator(LOGIN_PASSWORD).fill(password)
+
+    if DEBUG:
+        input("Debug mode activated; press enter to continue...")
+
     page.locator(LOGIN_BUTTON).click()
+
+    try:
+        dialog_el = page.locator("p.el-message__content")
+        dialog_el.wait_for(timeout=5000, state="visible")
+        text = dialog_el.inner_text().strip().lower()
+        if "incorrect" in text:
+            raise Exception(f"Incorrect credentials for backend: {backend.name}")
+    except PlaywrightTimeoutError:
+        logger.info("login accepted")
 
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
