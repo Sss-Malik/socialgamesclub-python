@@ -48,13 +48,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
             cap_in.fill(text)
         btn.click()
         try:
-            # look for “incorrect” banner
-            page.locator("div.layui-layer-content", has_text="incorrect").wait_for(timeout=5000)
-            logger.warning("CAPTCHA incorrect, retrying…")
-            solver.report_incorrect_image_captcha()
-            page.reload(wait_until="domcontentloaded")
+            dialog_el = page.locator("div.layui-layer.layui-layer-dialog")
+            dialog_el.wait_for(timeout=5000, state="visible")
+            text = dialog_el.inner_text().strip().lower()
+            if "the verification code is incorrect" in text:
+                logger.warning("CAPTCHA incorrect, retrying…")
+                if not DEBUG:
+                    solver.report_incorrect_image_captcha()
+                page.reload(wait_until="domcontentloaded")
+            elif "username or password error" in text:
+                raise Exception(f"Incorrect login credentials for backend: {backend.name}")
+            else:
+                logger.info(f"unknown text: {text}")
+                break
         except PlaywrightTimeoutError:
-            logger.info("CAPTCHA accepted.")
+            logger.info("login accepted.")
             break
 
     logger.debug("Waiting for main page element after login.")
