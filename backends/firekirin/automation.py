@@ -47,14 +47,24 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
         login_button.click()
 
         try:
-            page.locator("div#mb_con", has_text="incorrect").wait_for(timeout=5000)
-            page.locator("input#mb_btn_ok").click()
-            logger.warning("CAPTCHA incorrect, retrying…")
-            solver.report_incorrect_image_captcha()
-            page.reload(wait_until="domcontentloaded")
-            continue
+            dialog_el = page.locator("div#mb_con", has_text="incorrect")
+            dialog_el.wait_for(timeout=5000, state="visible")
+            text = dialog_el.inner_text().strip().lower()
+            if "the validation code you filled in is incorrect" in text:
+                logger.warning("CAPTCHA incorrect, retrying…")
+                if not DEBUG:
+                    solver.report_incorrect_image_captcha()
+                page.locator("input#mb_btn_ok").click()
+                page.wait_for_load_state("networkidle")
+                continue
+            elif "the account or password you filled in is incorrect" in text:
+                logger.error("Incorrect login credentials")
+                raise Exception(f"Incorrect login credentials for backend: {backend.name}")
+            else:
+                logger.info(f"unknown text: {text}")
+                break
         except PlaywrightTimeoutError:
-            logger.info("CAPTCHA accepted.")
+            logger.info("login accepted.")
             break
 
     logger.debug("Waiting for main page element after login.")
