@@ -38,12 +38,14 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
         alert.wait_for(timeout=8000, state="visible")
         text = alert.inner_text().strip().lower()
         if "incorrect login or password" in text:
+
             logger.error("Incorrect login credentials.")
             raise Exception(f"Incorrect credentials for backend: {backend.name}")
     except PlaywrightTimeoutError:
         logger.info("Login likely successful (no error dialog detected).")
 
     logger.info("Login successful, navigating to user management page.")
+
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=20_000)
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
     logger.info("Login and navigation successful.")

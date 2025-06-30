@@ -57,17 +57,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
             dialog_el.wait_for(timeout=5000, state="visible")
             text = dialog_el.inner_text().strip().lower()
             if "the validation code you filled in is incorrect" in text:
+
                 logger.warning("Incorrect CAPTCHA entered.")
+
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.locator("input#mb_btn_ok").click()
                 page.wait_for_load_state("networkidle")
                 continue
             elif "the account or password you filled in is incorrect" in text:
+
                 logger.error("Incorrect login credentials.")
                 raise Exception(f"Incorrect login credentials for backend: {backend.name}")
         except PlaywrightTimeoutError:
             logger.info("Login likely successful (no error dialog detected).")
+
             break
 
     logger.info("Login successful, navigating to user management page.")

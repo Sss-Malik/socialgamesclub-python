@@ -28,7 +28,9 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
     page.locator(LOGIN_PASSWORD).fill(password)
 
     if DEBUG:
+
         input("Debug mode: Solve CAPTCHA manually and press enter.")
+
 
     page.locator(LOGIN_BUTTON).click()
 
@@ -37,6 +39,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
         dialog_el.wait_for(timeout=5000, state="visible")
         text = dialog_el.inner_text().strip().lower()
         if "incorrect" in text:
+
             logger.error("Incorrect login credentials.")
             raise Exception(f"Incorrect credentials for backend: {backend.name}")
         else:
@@ -45,6 +48,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
         logger.info("Login likely successful (no error dialog detected).")
 
     logger.info("Login successful, navigating to user management page.")
+
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
     logger.info("✅ Login successful.")
 
