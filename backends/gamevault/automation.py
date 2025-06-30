@@ -59,19 +59,15 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
             dialog_el.wait_for(timeout=5000, state="visible")
             text = dialog_el.inner_text().strip().lower()
             if "the verification code is incorrect" in text:
-
                 logger.warning("Incorrect CAPTCHA entered.")
-
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.reload(wait_until="domcontentloaded")
             elif "the user name or password is incorrect" in text:
-
                 logger.error("Incorrect login credentials.")
                 raise Exception(f"Incorrect credentials for backend: {backend.name}")
             else:
                 logger.info(f"Unknown dialog message: {text}")
-
                 break
         except PlaywrightTimeoutError:
             logger.info("Login likely successful (no error dialog detected).")
@@ -98,7 +94,6 @@ def _create_single_account(page: Page, logger: logging.Logger):
         page.locator(ACCOUNT_PASSWORD).fill(password)
         page.locator(CONFIRM_PASSWORD).fill(password)
 
-        page.screenshot(path="headless_debug.png", full_page=True)
 
         page.locator(CREATE_ACCOUNT).click()
 
