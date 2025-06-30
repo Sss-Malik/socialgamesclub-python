@@ -14,19 +14,21 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
 from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend):
-    logger.info("Fetching backend details from db...")
+    logger.info("Starting login process.")
+    logger.debug("Fetching backend details from db...")
     username = backend.username or USERNAME
     password = backend.password or PASSWORD
     login_url = backend.backend_url or LOGIN_URL
 
-    logger.info("Navigating to login page: %s", LOGIN_URL)
+    logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
+    logger.debug("Navigating to login page at: %s", LOGIN_URL)
     page.goto(login_url, wait_until="domcontentloaded")
 
     page.locator(LOGIN_ACCOUNT).fill(username)
     page.locator(LOGIN_PASSWORD).fill(password)
 
     if DEBUG:
-        input("Debug mode activated. Press enter to continue...")
+        input("Debug mode: Solve CAPTCHA manually and press enter.")
 
     page.locator(LOGIN_BUTTON).click()
 
@@ -35,18 +37,23 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
         dialog_el.wait_for(timeout=5000, state="visible")
         text = dialog_el.inner_text().strip().lower()
         if "incorrect" in text:
+            logger.error("Incorrect login credentials.")
             raise Exception(f"Incorrect credentials for backend: {backend.name}")
+        else:
+            logger.info(f"Unknown dialog message: {text}")
     except PlaywrightTimeoutError:
-        logger.info("login accepted")
+        logger.info("Login likely successful (no error dialog detected).")
 
+    logger.info("Login successful, navigating to user management page.")
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
     logger.info("✅ Login successful.")
 
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+    logger.info("Login and navigation successful.")
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
-    logger.debug("Initiating create account dialog.")
+    logger.debug("Opening create account dialog.")
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
     while True:
@@ -72,30 +79,30 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 if msg.is_visible():
                     text = msg.inner_text().strip().lower()
                     if "username used" in text or "form is being submitted" in text or "incorrect" in text:
-                        logger.warning("⚠️ Detected message: %r — restarting account creation.", text)
+                        logger.warning("Detected message: %r — restarting account creation.", text)
                         should_restart = True
                         break
                     elif "sucessful" in text:
-                        logger.info("✅ Account created successfully.")
+                        logger.info("Account created successfully: %s", account_id)
                         insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
                         save_credentials(account_id, password, logger, DATA_DIR)
                         success = True
                         break
                     else:
-                        logger.info("ℹ️ Unhandled but visible message: %r", text)
+                        logger.warning(f"Unexpected message after creating account: {text}")
                         insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url))
             if success:
                 break
             if should_restart:
                 continue
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ Timeout occurred in account creation.")
+            logger.error("Failed to detect result dialog after account creation.")
             insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url))
             break
 
 
 def _recharge_account(page: Page, logger: logging.Logger, points: int, account_id: str):
-    logger.debug(f"Starting recharge for account: {account_id} with count: {points}")
+    logger.info(f"Initiating recharge: account_id={account_id}, amount={points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -110,10 +117,10 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=5_000)
             text = err.inner_text().strip().lower()
             if "error: 167" in text or "frequency of requests is too high" in text:
-                logger.warning("⚠️ Frequency too high, retrying…")
+                logger.warning("Frequency too high, retrying…")
                 continue
         except PlaywrightTimeoutError:
-            logger.info("✅ No error message, proceeding…")
+            logger.info("No error message, proceeding…")
 
 
         # open the score‐setting UI
@@ -125,10 +132,10 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=5_000)
             text = err.inner_text().strip().lower()
             if "error: 167" in text or "frequency of requests is too high" in text:
-                logger.warning("⚠️ Frequency too high, retrying…")
+                logger.warning("Frequency too high, retrying…")
                 continue
         except PlaywrightTimeoutError:
-            logger.info("✅ No error message, proceeding…")
+            logger.info("No error message, proceeding…")
 
         # fill in points
         inp = page.locator('input[placeholder="Set points : ie 100"]')
@@ -136,7 +143,7 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         inp.fill(str(points))
 
         if DEBUG:
-            input("Debug mode activated. Press enter to continue...")
+            input("Debug mode: press enter to continue recharge.")
 
         # confirm
         page.locator(
@@ -149,19 +156,21 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             alert.wait_for(state="visible", timeout=5_000)
             text = alert.inner_text().strip().lower()
             if "not authorized to check remaining balance" in text:
-                logger.warning("Backend balance insufficient")
-                raise Exception("Backend balance insufficient")
+                logger.error("Recharge failed: backend balance insufficient.")
+                raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
             elif "sucessful operation" in text:
-                logger.info("Account successfully recharged.")
+                logger.info("Recharge successful.")
+                insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
             else:
-                insert_log("warning", f"Unexpected recharge response: {text} for account: {account_id}", source_url=str(page.url))
+                logger.warning(f"Unexpected recharge response: {text}")
+                insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ No dialog appeared after setting score.")
+            logger.exception("No dialog appeared after setting score.")
             insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
         break
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
-    logger.debug(f"Reading account: {account_id}")
+    logger.info(f"Reading account info: {account_id}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -176,10 +185,10 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
             err.wait_for(state="visible", timeout=2000)
             text = err.inner_text().strip().lower()
             if "error: 167" in text or "frequency of requests is too high" in text:
-                logger.warning("⚠️ Frequency too high, retrying…")
+                logger.warning("Frequency too high, retrying…")
                 continue
         except PlaywrightTimeoutError:
-            logger.info("✅ No error message, proceeding…")
+            logger.info("No error message, proceeding…")
 
         table = page.locator(
             "div.el-table",
@@ -194,17 +203,18 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         ).first
 
         row.wait_for(timeout=5000)
+        logger.debug("Account row located in table.")
 
         data = {
             "account": row.locator("td:nth-child(2) .cell span").inner_text().strip(),
             "balance": row.locator("td:nth-child(10) .cell span").inner_text().strip(),
         }
 
-        logger.info("✅ Extracted row data: %s", data)
+        logger.info(f"Account read data: {data}")
         break
 
 def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_id: str):
-    logger.debug(f"Starting withdraw for account: {account_id} with count: {points}")
+    logger.info(f"Initiating withdrawal: account_id={account_id}, amount={points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
         page.locator("label.el-radio", has_text="Player account").click()
@@ -219,7 +229,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=2000)
             text = err.inner_text().strip().lower()
             if "error: 167" in text or "frequency of requests is too high" in text:
-                logger.warning("⚠️ Frequency too high, retrying…")
+                logger.warning("⚠Frequency too high, retrying…")
                 continue
         except PlaywrightTimeoutError:
             logger.info("✅ No error message, proceeding…")
@@ -234,10 +244,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=2000)
             text = err.inner_text().strip().lower()
             if "error: 167" in text or "frequency of requests is too high" in text:
-                logger.warning("⚠️ Frequency too high, retrying…")
+                logger.warning("Frequency too high, retrying…")
                 continue
         except PlaywrightTimeoutError:
-            logger.info("✅ No error message, proceeding…")
+            logger.info("No error message, proceeding…")
 
         # fill in points
         inp = page.locator('input[placeholder="Set points : ie 100"]')
@@ -257,15 +267,16 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             err.wait_for(state="visible", timeout=3000)
             text = err.inner_text().strip().lower()
             if "cannot exceed current points" in text:
-                logger.warning("⚠️ Customer balance insufficient")
-                raise Exception("Customer balance insufficient")
+                logger.error("Withdrawal failed due to insufficient gold.")
+                raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
             elif "sucessful operation" in text:
-                logger.info("Account successfully redeemed.")
-                return
+                logger.info("Withdraw successful.")
+                insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
             else:
-                insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}", source_url=str(page.url))
+                logger.warning(f"Unexpected withdrawal response: {text}")
+                insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
         except PlaywrightTimeoutError:
-            logger.warning("⚠️ No dialog appeared after setting score.")
+            logger.exception("No dialog appeared after setting score.")
             insert_log("warning", f"Failed to detect dialog after withdraw for account: {account_id}", source_url=str(page.url))
         break
 
@@ -275,7 +286,7 @@ def action_create_account():
     count = int(backend.accounts_creation_pd)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("==== Starting account creation (%d accounts) ====", count)
+    logger.info("==== Initiating account creation (%d accounts) ====", count)
 
     try:
         with sync_playwright() as pw:
@@ -300,7 +311,7 @@ def action_create_account():
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             for i in range(count):
@@ -320,7 +331,7 @@ def action_recharge_account(count: int, account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting score‐set action: %s → %d count =====", account_id, count)
+    logger.info("===== Initiating score‐set action: %s → %d count =====", account_id, count)
 
     try:
         with sync_playwright() as pw:
@@ -345,7 +356,7 @@ def action_recharge_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _recharge_account(page, logger, count, account_id)
@@ -363,7 +374,7 @@ def action_withdraw_account(count: int, account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting redeem action: %s → %d count =====", account_id, count)
+    logger.info("===== Initiating redeem action: %s → %d count =====", account_id, count)
 
     try:
         with sync_playwright() as pw:
@@ -388,7 +399,7 @@ def action_withdraw_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info", f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _withdraw_account(page, logger, count, account_id)
@@ -406,7 +417,7 @@ def action_read_account(account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
-    logger.info("===== Starting read action: %s =====", account_id)
+    logger.info("===== Initiating read action: %s =====", account_id)
 
     try:
         with sync_playwright() as pw:
@@ -431,7 +442,7 @@ def action_read_account(account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
+            insert_log("info", f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _read_account(page, logger, account_id)

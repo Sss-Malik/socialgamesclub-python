@@ -16,10 +16,14 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
 from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend):
-    logger.info("Fetching backend details from db...")
+    logger.info("Initiating login process.")
+    logger.debug("Fetching backend details from db...")
+    
     username = backend.username or USERNAME
     password = backend.password or PASSWORD
     login_url = backend.backend_url or LOGIN_URL
+
+    logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
 
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
     page.goto(login_url, wait_until="domcontentloaded")
@@ -36,7 +40,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
 
         logger.debug("Solving CAPTCHA…")
         if DEBUG:
-            input("Debug mode activated. Press Enter to continue...")
+            input("Debug mode: Solve CAPTCHA manually and press enter.")
         else:
 
             text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
@@ -52,20 +56,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
             dialog_el.wait_for(timeout=5000, state="visible")
             text = dialog_el.inner_text().strip().lower()
             if "the verification code is incorrect" in text:
-                logger.warning("CAPTCHA incorrect, retrying…")
+                logger.warning("Incorrect CAPTCHA entered.")
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.reload(wait_until="domcontentloaded")
             elif "username or password error" in text:
+                logger.error("Incorrect login credentials.")
                 raise Exception(f"Incorrect login credentials for backend: {backend.name}")
             else:
-                logger.info(f"unknown text: {text}")
+                logger.info(f"Unknown dialog message: {text}")
                 break
         except PlaywrightTimeoutError:
-            logger.info("login accepted.")
+            logger.info("Login likely successful (no error dialog detected).")
             break
 
-    logger.debug("Waiting for main page element after login.")
+    logger.info("Login successful, navigating to user management page.")
     page.locator(MAIN_PAGE_EL).wait_for(state="attached", timeout=20_000)
 
     game_user = page.locator('a', has_text="Game User")
@@ -80,7 +85,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
-    logger.debug("Initiating create account dialog.")
+    logger.debug("Opening create account dialog.")
     main_iframe = page.frame_locator(MAIN_IFRAME)
     main_iframe.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
@@ -104,7 +109,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
             text = msg.inner_text().strip().lower()
 
             if "username already exists" in text:
-                logger.info("Account ID already exists: %s", account_id)
+                logger.warning(f"Account ID already exists: {account_id}")
                 continue
             elif "successful" in text:
                 logger.info("Account created successfully: %s", account_id)
@@ -114,18 +119,18 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
                 break
             else:
-                logger.warning("Unexpected response: %r", text)
+                logger.warning(f"Unexpected message after creating account: {text}")
                 insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url))
                 break
 
         except PlaywrightTimeoutError:
-            logger.exception("No success message after submit, moving on.")
+            logger.error("Failed to detect result dialog after account creation.")
             insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url))
             break
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    logger.debug(f"Starting withdraw for account: {account_id} with count: {count}")
+    logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
     main_iframe = page.frame_locator(MAIN_IFRAME)
 
     main_iframe.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -134,6 +139,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     # call your existing helper (which still expects a Frame object)
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
+    logger.debug("Calling click_withdraw_for_account helper.")
     click_withdraw_for_account(frame_obj, account_id, logger)
 
     page.wait_for_timeout(1000)
@@ -144,7 +150,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     withdraw_iframe.locator("div.layui-form-item:has(label:text('Withdraw Balance')) input").fill(str(count))
 
     if DEBUG:
-        input("Debug mode activated. Press Enter to continue...")
+        input("Debug mode: press enter to continue withdrawal.")
 
     withdraw_iframe.locator("button:has-text('Submit')").click()
 
@@ -154,22 +160,22 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         result.wait_for(timeout=5_000, state="visible")
         text = result.inner_text().strip().lower()
         if "successful" in text:
-            logger.info("✅ Account withdraw successful.")
+            logger.info("Withdraw successful.")
+            insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
         elif "withdrawal amount is greater than customer balance" in text:
-            logger.info("Customer balance insufficient")
-            raise Exception("Customer balance insufficient for withdrawal.")
-
+            logger.error("Withdrawal failed due to insufficient gold.")
+            raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
         else:
-            logger.warning("⚠️ Unexpected withdraw message: %r", text)
-            insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}", source_url=str(page.url))
+            logger.warning(f"Unexpected withdrawal response: {text}")
+            insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        logger.exception("⚠️ No withdraw confirmation dialog appeared.")
-        insert_log("warning", f"Failed to detect dialog after withdraw for account: {account_id}", source_url=str(page.url))
+        logger.error("Failed to detect result dialog after account withdrawal.")
+        insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url))
 
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
-    logger.debug(f"Reading account: {account_id}")
+    logger.info(f"Reading account info: {account_id}")
     main_iframe = page.frame_locator(MAIN_IFRAME)
 
     # search
@@ -186,6 +192,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     ).first
 
     row.wait_for(timeout=5000)
+    logger.debug("Account row located in table.")
     backend_account_id = row.locator("td[data-field='Id']").inner_text().strip()
     data = {
         "id": row.locator("td[data-field='Id']").inner_text().strip(),
@@ -197,13 +204,12 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         "last_login": row.locator("td[data-field='lasttime']").inner_text().strip(),
         "last_login_ip": row.locator("td[data-field='loginip']").inner_text().strip(),
     }
-    logger.info("✅ Extracted row data: %s", data)
     update_game_id_by_username(account_id, backend_account_id)
+    logger.info(f"Account read data: {data}")
 
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str):
-    logger.debug(f"Starting recharge for account: {account_id} with count: {count}")
-
+    logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
     main_iframe = page.frame_locator(MAIN_IFRAME)
 
     # search
@@ -220,7 +226,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     recharge_iframe.locator('input[name="balance"]').fill(str(count))
 
     if DEBUG:
-        input("Debug mode activated. Press enter to continue...")
+        input("Debug mode: press enter to continue recharge.")
 
     recharge_iframe.locator("button:has-text('Submit')").click()
 
@@ -230,16 +236,17 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         result.wait_for(timeout=10_000)
         text = result.inner_text().strip().lower()
         if "successful" in text:
-            logger.info("✅ Account deposit successful.")
+            logger.info("Recharge successful.")
+            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
             main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
         elif "recharge balance is greater than available balance" in text:
-            logger.info("Account recharge balance is greater than available balance.")
-            raise Exception("Backend balance insufficient.")
+            logger.error("Recharge failed: backend balance insufficient.")
+            raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
         else:
-            logger.warning("⚠️ Unexpected recharge message: %r", text)
-            insert_log("warning", f"Unexpected recharge response: {text} for account: {account_id}", source_url=str(page.url))
+            logger.warning(f"Unexpected recharge response: {text}")
+            insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        logger.exception("⚠️ No recharge confirmation dialog appeared.")
+        logger.error("No recharge confirmation dialog appeared.")
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
 
 
@@ -274,7 +281,7 @@ def action_create_account():
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
 
@@ -322,7 +329,7 @@ def action_recharge_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _recharge_account(page, logger, count, account_id)
@@ -365,7 +372,7 @@ def action_withdraw_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info", f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _withdraw_account(page, logger, count, account_id)
@@ -408,7 +415,7 @@ def action_read_account(account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
+            insert_log("info", f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _read_account(page, logger, account_id)

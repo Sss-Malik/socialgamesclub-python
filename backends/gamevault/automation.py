@@ -18,10 +18,13 @@ from settings import APP_ENV, HEADLESS, DEBUG
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend):
-    logger.info("Fetching backend details from db...")
+    logger.info("Initiating login process.")
+    logger.debug("Fetching backend details from db...")
+
     username = backend.username or USERNAME
     password = backend.password or PASSWORD
     login_url = backend.backend_url or LOGIN_URL
+    logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
 
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
@@ -40,7 +43,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
 
         logger.debug("Solving CAPTCHA…")
         if DEBUG:
-            input("Debug mode activated. Press Enter to continue...")
+            input("Debug mode: Solve CAPTCHA manually and press enter.")
         else:
             text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
             if not text or text == 0:
@@ -56,29 +59,30 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend):
             dialog_el.wait_for(timeout=5000, state="visible")
             text = dialog_el.inner_text().strip().lower()
             if "the verification code is incorrect" in text:
-                logger.warning("CAPTCHA incorrect, retrying…")
+                logger.warning("Incorrect CAPTCHA entered.")
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.reload(wait_until="domcontentloaded")
             elif "the user name or password is incorrect" in text:
+                logger.error("Incorrect login credentials.")
                 raise Exception(f"Incorrect credentials for backend: {backend.name}")
             else:
-                logger.info(f"unknown text: {text}")
+                logger.info(f"Unknown dialog message: {text}")
                 break
         except PlaywrightTimeoutError:
-            logger.info("CAPTCHA accepted.")
+            logger.info("Login likely successful (no error dialog detected).")
             break
 
     logger.debug("Waiting for main page element after login.")
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
-
+    logger.info("Login successful, navigating to user management page.")
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
     logger.info("Login and navigation successful.")
 
 
 def _create_single_account(page: Page, logger: logging.Logger):
-    logger.debug("Initiating create account dialog.")
+    logger.debug("Opening create account dialog.")
     while True:
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
@@ -124,20 +128,21 @@ def _create_single_account(page: Page, logger: logging.Logger):
             dlg.wait_for(timeout=10000, state="visible")
             text = dlg.inner_text().strip().lower()
             if "successfully" in text:
-                logger.info("✅ Account created successfully.")
+                logger.info("Account created successfully: %s", account_id)
                 save_credentials(account_id, password, logger, DATA_DIR)
                 insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
                 break
             else:
-                logger.warning("Unexpected success message: %r", text)
+                logger.warning(f"Unexpected message after creating account: {text}")
                 insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url))
         except PlaywrightTimeoutError:
-            logger.exception("No success dialog appeared after creating account.")
+            logger.error("Failed to detect result dialog after account creation.")
             insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url))
+            break
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str):
-    logger.debug(f"Reading account: {account_id}")
+    logger.info(f"Reading account info: {account_id}")
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
@@ -148,6 +153,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     ).first
 
     row.wait_for(timeout=5000)
+    logger.debug("Account row located in table.")
     backend_account_id = row.locator("td:nth-child(2) .cell").inner_text().strip()
     data = {
         "id": row.locator("td:nth-child(2) .cell").inner_text().strip(),
@@ -159,12 +165,11 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
         "last_login_ip": row.locator("td:nth-child(11) .cell").inner_text().strip(),
     }
     update_game_id_by_username(account_id, backend_account_id)
-    logger.info("✅ Extracted row data: %s", data)
-
+    logger.info(f"Account read data: {data}")
 
 
 def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
-    logger.debug(f"Starting recharge for account: {account_id} with count: {amount}")
+    logger.info(f"Initiating recharge: account_id={account_id}, amount={amount}")
 
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
@@ -176,7 +181,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         .fill(str(amount))
 
     if DEBUG:
-        input("Debug mode activated. Press Enter to continue...")
+        input("Debug mode: press enter to continue recharge.")
 
     # confirm dialog
     dlg = page.locator("div.el-dialog",
@@ -192,8 +197,8 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         if msg.is_visible():
             text = msg.inner_text().strip().lower()
             if "not enougn balance" in text:
-                logger.warning("Detected message: %r —", text)
-                raise Exception("Backend balance insufficient.")
+                logger.error("Recharge failed: backend balance insufficient.")
+                raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
             if "form is being submitted" in text:
                 return
 
@@ -205,21 +210,22 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         deposit.wait_for(timeout=5_000, state="visible")
         txt = deposit.inner_text().strip().lower()
         if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
-            logger.info(f"✅ Recharge confirmed: {txt}")
+            logger.info("Recharge successful.")
+            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
         else:
-            logger.warning(f"⚠️ Unexpected deposit text: {txt}")
-            insert_log("warning", f"Unexpected recharge response: {txt} for account: {account_id}", source_url=str(page.url))
+            logger.warning(f"Unexpected recharge response: {txt}")
+            insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        logger.warning("⚠️ No deposit confirmation appeared.")
+        logger.error("No recharge confirmation dialog appeared.")
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
-    logger.debug(f"Starting withdraw for account: {account_id} with count: {amount}")
+    logger.info(f"Initiating withdrawal: account_id={account_id}, amount={amount}")
 
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
-
+    logger.debug("Calling click_redeem_for_account helper.")
     click_redeem_for_account(page, account_id, logger)
 
     # confirm dialog
@@ -233,7 +239,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
         .fill(str(amount))
 
     if DEBUG:
-        input("Debug mode activated. Press Enter to continue...")
+        input("Debug mode: press enter to continue withdrawal.")
 
     confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
     confirm_btn.wait_for(state="visible", timeout=10_000)
@@ -248,16 +254,17 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
             if msg.is_visible():
                 text = msg.inner_text().strip().lower()
                 if "the redeem amount can not be greater than the balance on the body！" in text:
-                    logger.warning("⚠️ Customer balance insufficient")
-                    raise Exception("Customer balance insufficient")
+                    logger.error("Withdrawal failed due to insufficient gold.")
+                    raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
                 elif "success" in text:
-                    logger.info(f"✅ Withdraw confirmed")
+                    logger.info("Withdraw successful.")
+                    insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
                 else:
-                    logger.warning(f"⚠️ Unexpected withdraw text: {text}")
-                    insert_log("warning", f"Unexpected withdraw response: {text} for account: {account_id}", source_url=str(page.url))
+                    logger.warning(f"Unexpected withdrawal response: {text}")
+                    insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        logger.exception("⚠️ No withdraw confirmation appeared.")
-        insert_log("warning", f"Failed to detect dialog after withdraw for account: {account_id}", source_url=str(page.url))
+        logger.error("Failed to detect result dialog after account withdrawal.")
+        insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url))
 
 
 
@@ -291,7 +298,7 @@ def action_create_account():
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             for i in range(count):
@@ -338,7 +345,7 @@ def action_recharge_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info",f"Starting recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info",f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _recharge_account(page, logger, count, account_id)
@@ -381,7 +388,7 @@ def action_withdraw_account(count: int, account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
+            insert_log("info", f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _withdraw_account(page, logger, count, account_id)
@@ -425,7 +432,7 @@ def action_read_account(account_id: str):
             )
 
             page = context.new_page()
-            insert_log("info", f"Starting read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
+            insert_log("info", f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
 
             _login_and_navigate(page, logger, backend)
             _read_account(page, logger, account_id)
