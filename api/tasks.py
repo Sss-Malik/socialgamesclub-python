@@ -1,5 +1,5 @@
 from celery_app import celery_app
-from .main import _invoke_action
+from main import _invoke_action
 
 @celery_app.task(name="automation.invoke_action", bind=True)
 def invoke_action(self, backend: str, action: str, **kwargs):
