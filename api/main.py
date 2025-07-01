@@ -4,7 +4,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, He
 from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
 import logging
 from settings import APP_KEY
-from tasks import invoke_action
+from .tasks import invoke_action
+from .dispatcher import invoke_backend_action
 
 app = FastAPI(
     title="Casino Automation API",
