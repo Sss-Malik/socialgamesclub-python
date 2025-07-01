@@ -1,4 +1,8 @@
-import os
+import os, sys
+project_root = os.getcwd()            # /app
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from celery import Celery
 from settings import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
