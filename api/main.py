@@ -7,6 +7,9 @@ from settings import APP_KEY
 from .tasks import invoke_action
 from .dispatcher import invoke_backend_action
 
+from celery_app import celery_app
+from celery.result import AsyncResult
+
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
@@ -108,3 +111,23 @@ async def receive_webhook(request: Request):
         "status": "received",
         "received_payload": payload
     }
+
+@app.get("/automation/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Retrieve status and (if ready) result or error of a previously‐scheduled Celery task.
+    """
+    async_result = AsyncResult(task_id, app=celery_app)
+
+    payload = {
+        "task_id": task_id,
+        "status": async_result.status,  # e.g. PENDING, STARTED, SUCCESS, FAILURE
+    }
+
+    if async_result.status == "SUCCESS":
+        payload["result"] = async_result.result
+    elif async_result.status == "FAILURE":
+        # celery stores the exception instance in .result
+        payload["error"] = str(async_result.result)
+
+    return payload
