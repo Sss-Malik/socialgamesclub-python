@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, He
 from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
 import logging
 from settings import APP_KEY
+from .tasks import invoke_action
+
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
@@ -37,7 +39,6 @@ def _invoke_action(backend: str, action: str, **kwargs):
 @app.post("/automation/create-account")
 async def create_account(
     req: CreateAccountRequest,
-    bg: BackgroundTasks,
     x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -45,17 +46,12 @@ async def create_account(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid APP_KEY"
         )
-
-    """
-    Schedule create-account action: params = backend, count
-    """
-    bg.add_task(_invoke_action, req.backend, "create-account")
-    return {"status": "scheduled", **req.dict(), "action": "create-account"}
+    task = invoke_action.delay(req.backend, "create-account")
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "create-account"}
 
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
-    bg: BackgroundTasks,
     x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -64,22 +60,12 @@ async def recharge_account(
             detail="Invalid APP_KEY"
         )
 
-    """
-    Schedule recharge-account action: backend, count, account_id
-    """
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "recharge-account",
-        count=req.count,
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "recharge-account"}
+    task = invoke_action.delay(req.backend, "recharge-account", account_id=req.account_id, count=req.count)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "recharge-account"}
 
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
         req: WithdrawAccountRequest,
-        bg: BackgroundTasks,
         x_app_key: str = Header(None)
 ):
 
@@ -89,19 +75,13 @@ async def withdraw_account(
             detail="Invalid APP_KEY"
         )
 
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "withdraw-account",
-        count=req.count,
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "withdraw-account"}
+    task = invoke_action.delay(req.backend, "withdraw-account", account_id=req.account_id, count=req.count)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "withdraw-account"}
+
 
 @app.post("/automation/read-account")
 async def read_account(
         req: ReadAccountRequest,
-        bg: BackgroundTasks,
         x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -110,13 +90,8 @@ async def read_account(
             detail="Invalid APP_KEY"
         )
 
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "read-account",
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "read-account"}
+    task = invoke_action.delay(req.backend, "read-account", account_id=req.account_id)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "read-account"}
 
 
 @app.post("/automation/results")
