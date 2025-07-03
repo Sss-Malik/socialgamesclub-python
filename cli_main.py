@@ -75,6 +75,8 @@ def main():
     kwargs = {}
 
     for name, param in sig.parameters.items():
+        if name == "page":
+            continue
         if name == "count":
             kwargs["count"] = args.count
         elif name == "account_id":

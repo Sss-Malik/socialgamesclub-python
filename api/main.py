@@ -4,6 +4,12 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, He
 from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
 import logging
 from settings import APP_KEY
+from .tasks import invoke_action
+from .dispatcher import invoke_backend_action
+
+from celery_app import celery_app
+from celery.result import AsyncResult
+
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
@@ -37,7 +43,6 @@ def _invoke_action(backend: str, action: str, **kwargs):
 @app.post("/automation/create-account")
 async def create_account(
     req: CreateAccountRequest,
-    bg: BackgroundTasks,
     x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -45,17 +50,12 @@ async def create_account(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid APP_KEY"
         )
-
-    """
-    Schedule create-account action: params = backend, count
-    """
-    bg.add_task(_invoke_action, req.backend, "create-account")
-    return {"status": "scheduled", **req.dict(), "action": "create-account"}
+    task = invoke_action.delay(req.backend, "create-account")
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "create-account"}
 
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
-    bg: BackgroundTasks,
     x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -64,22 +64,12 @@ async def recharge_account(
             detail="Invalid APP_KEY"
         )
 
-    """
-    Schedule recharge-account action: backend, count, account_id
-    """
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "recharge-account",
-        count=req.count,
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "recharge-account"}
+    task = invoke_action.delay(req.backend, "recharge-account", account_id=req.account_id, count=req.count)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "recharge-account"}
 
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
         req: WithdrawAccountRequest,
-        bg: BackgroundTasks,
         x_app_key: str = Header(None)
 ):
 
@@ -89,19 +79,13 @@ async def withdraw_account(
             detail="Invalid APP_KEY"
         )
 
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "withdraw-account",
-        count=req.count,
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "withdraw-account"}
+    task = invoke_action.delay(req.backend, "withdraw-account", account_id=req.account_id, count=req.count)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "withdraw-account"}
+
 
 @app.post("/automation/read-account")
 async def read_account(
         req: ReadAccountRequest,
-        bg: BackgroundTasks,
         x_app_key: str = Header(None)
 ):
     if x_app_key != APP_KEY:
@@ -110,13 +94,8 @@ async def read_account(
             detail="Invalid APP_KEY"
         )
 
-    bg.add_task(
-        _invoke_action,
-        req.backend,
-        "read-account",
-        account_id=req.account_id
-    )
-    return {"status": "scheduled", **req.dict(), "action": "read-account"}
+    task = invoke_action.delay(req.backend, "read-account", account_id=req.account_id)
+    return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "read-account"}
 
 
 @app.post("/automation/results")
@@ -132,3 +111,23 @@ async def receive_webhook(request: Request):
         "status": "received",
         "received_payload": payload
     }
+
+@app.get("/automation/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Retrieve status and (if ready) result or error of a previously‐scheduled Celery task.
+    """
+    async_result = AsyncResult(task_id, app=celery_app)
+
+    payload = {
+        "task_id": task_id,
+        "status": async_result.status,  # e.g. PENDING, STARTED, SUCCESS, FAILURE
+    }
+
+    if async_result.status == "SUCCESS":
+        payload["result"] = async_result.result
+    elif async_result.status == "FAILURE":
+        # celery stores the exception instance in .result
+        payload["error"] = str(async_result.result)
+
+    return payload

@@ -1,4 +1,3 @@
-# automation_gameroom.py
 import logging
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
@@ -12,6 +11,7 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
+from common.utils.browser import with_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
@@ -254,181 +254,109 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
 
 
-
-def action_create_account():
+@with_browser
+def action_create_account(page: Page):
     backend = get_backend(BACKEND_NAME)
     count = int(backend.accounts_creation_pd)
-    ensure_directories(DATA_DIR, LOGS_DIR, CAPTCHA_DIR)
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Create-account action started for %d accounts.", count)
 
     try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                headless=HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
-                    "--no-sandbox",
-                ]
-            )
-
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720},
-                locale="en-US",
-                color_scheme="light",
-            )
-
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-
-            page = context.new_page()
-            insert_log("info",f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
-
-            _login_and_navigate(page, logger, backend)
-
-            for i in range(count):
-                logger.info("🔨 Creating account %d of %d", i + 1, count)
-                page.wait_for_timeout(2_000)
-                _create_single_account(page, logger)
-
-            browser.close()
+        insert_log(
+            "info",
+            f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.",
+            source_url=str(page.url),
+        )
+        _login_and_navigate(page, logger, backend)
+        for i in range(count):
+            logger.info("Creating account %d of %d", i + 1, count)
+            _create_single_account(page, logger)
+            page.reload(wait_until="domcontentloaded")
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account creation: %s", e, exc_info=True)
-        insert_log("error", f"Error during account creation: {e}", source_url=str(page.url))
-
+        insert_log(
+            "error",
+            f"Error during account creation: {e}",
+            source_url=str(page.url),
+        )
     finally:
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
-
-def action_recharge_account(count: int, account_id: str):
+@with_browser
+def action_recharge_account(page: Page, count: int, account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
 
     try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                headless=HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
-                    "--no-sandbox",
-                ]
-            )
-
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720},
-                locale="en-US",
-                color_scheme="light",
-            )
-
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-
-            page = context.new_page()
-            insert_log("info",f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
-
-            _login_and_navigate(page, logger, backend)
-            _recharge_account(page, logger, count, account_id)
-
-            browser.close()
+        insert_log(
+            "info",
+            f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
+            source_url=str(page.url),
+        )
+        _login_and_navigate(page, logger, backend)
+        _recharge_account(page, logger, count, account_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
-        insert_log("error", f"Error during account recharge: {e}", source_url=str(page.url))
+        insert_log(
+            "error",
+            f"Error during account recharge: {e}",
+            source_url=str(page.url),
+        )
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
-
-def action_withdraw_account(count: int, account_id: str):
+@with_browser
+def action_withdraw_account(page: Page, count: int, account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Withdraw-account action started: account_id=%s, count=%d", account_id, count)
 
     try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                headless=HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
-                    "--no-sandbox",
-                ]
-            )
-
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720},
-                locale="en-US",
-                color_scheme="light",
-            )
-
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-
-            page = context.new_page()
-            insert_log("info", f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.", source_url=str(page.url))
-
-            _login_and_navigate(page, logger, backend)
-            _withdraw_account(page, logger, count, account_id)
-
-            browser.close()
+        insert_log(
+            "info",
+            f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
+            source_url=str(page.url),
+        )
+        _login_and_navigate(page, logger, backend)
+        _withdraw_account(page, logger, count, account_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
-        insert_log("error", f"Error during account withdrawal: {e}", source_url=str(page.url))
-
+        insert_log(
+            "error",
+            f"Error during account withdrawal: {e}",
+            source_url=str(page.url),
+        )
     finally:
+        logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
-
-def action_read_account(account_id: str):
+@with_browser
+def action_read_account(page: Page, account_id: str):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Read-account action started: account_id=%s", account_id)
 
     try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                headless=HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
-                    "--no-sandbox",
-                ]
-            )
-
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720},
-                locale="en-US",
-                color_scheme="light",
-            )
-
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-
-            page = context.new_page()
-            insert_log("info", f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url))
-
-            _login_and_navigate(page, logger, backend)
-            _read_account(page, logger, account_id)
-
-            browser.close()
+        insert_log(
+            "info",
+            f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url)
+        )
+        _login_and_navigate(page, logger, backend)
+        _read_account(page, logger, account_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account read: %s", e, exc_info=True)
-        insert_log("error", f"Error during account read: {e}", source_url=str(page.url))
-
+        insert_log(
+            "error",
+            f"Error during account read: {e}",
+            source_url=str(page.url),
+        )
     finally:
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url))

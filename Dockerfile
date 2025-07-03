@@ -16,6 +16,8 @@ COPY . .
 # Preinstall playwright browsers (if using)
 RUN playwright install --with-deps
 
+EXPOSE 8000
+
 CMD ["uvicorn", "api.main:app", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--workers", "4", "--log-level", "info"]
