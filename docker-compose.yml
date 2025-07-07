@@ -21,7 +21,7 @@ services:
   worker:
     build: .
     container_name: casino_worker
-    command: celery -A celery_app.celery_app worker --loglevel=info
+    command: celery -A celery_app.celery_app worker --loglevel=info --concurrency=8
     volumes:
       - .:/app
     env_file:
