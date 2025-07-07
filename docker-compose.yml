@@ -2,7 +2,7 @@ services:
   web:
     build: .
     container_name: casino_web
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
     volumes:
       - .:/app
     ports:
