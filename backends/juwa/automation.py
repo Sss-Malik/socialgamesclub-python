@@ -66,7 +66,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             elif "the user name or password is incorrect" in text:
 
                 logger.error("Incorrect login credentials.")
-                update_automation_result(task_id=task_id, status="failed", description="Incorrect login credentials.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}")
                 raise Exception(f"Incorrect credentials for backend: {backend.name}")
             else:
                 logger.info(f"Unknown dialog message: {text}")
@@ -182,7 +182,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                 text = msg.inner_text().strip().lower()
                 if "not enougn balance" in text:
                     logger.error("Recharge failed: backend balance insufficient.")
-                    update_automation_result(task_id=task_id, status="failed", description="Insufficient backend balance.")
+                    update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                     raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
                 if "success" in text:
                     logger.info("Recharge successful.")
@@ -191,13 +191,13 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                     update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
                 else:
                     logger.warning(f"Unexpected recharge response: {msg}")
-                    update_automation_result(task_id=task_id, status="failed", description="Unexpected recharge response.")
+                    update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
                     insert_log("warning", f"Unexpected recharge response: {msg}", source_url=str(page.url))
 
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect recharge confirmation.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
@@ -274,10 +274,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                     update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")
                 else:
                     logger.warning(f"Unexpected withdrawal response: {text}")
-                    update_automation_result(task_id=task_id, status="failed", description="Unexpected withdrawal response.")
+                    update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
                     insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect confirmation after account withdrawal.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdrawal on {BACKEND_NAME}")
         logger.error("Failed to detect result dialog after account withdrawal.")
         insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url))
 

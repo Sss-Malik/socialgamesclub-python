@@ -68,7 +68,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             elif "the account or password you filled in is incorrect" in text:
 
                 logger.error("Incorrect login credentials.")
-                update_automation_result(task_id=task_id, description="Incorrect login credentials.", status="failed")
+                update_automation_result(task_id=task_id, description=f"Incorrect login credentials for {BACKEND_NAME}.", status="failed")
                 raise Exception(f"Incorrect login credentials for backend: {backend.name}")
             else:
                 logger.info(f"Unknown dialog message: {text}")
@@ -97,8 +97,9 @@ def _create_single_account(page: Page, logger: logging.Logger):
         dialog.locator(CREATE_ACCOUNT).click()
 
         try:
-            page.locator("#mb_con").wait_for(timeout=20_000)
-            message = page.locator("#mb_msg").inner_text().lower()
+            result = page.locator("#mb_con")
+            result.wait_for(timeout=25000, state="visible")
+            message = result.inner_text().strip().lower()
 
             if "already exists" in message:
                 logger.warning(f"Account ID already exists: {account_id}")
@@ -144,8 +145,9 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     recharge.locator('input[type="button"][value="Recharge"]').click()
 
     try:
-        page.locator("#mb_con").wait_for(timeout=25000)
-        text = page.locator("#mb_con").inner_text().lower()
+        result = page.locator("#mb_con")
+        result.wait_for(timeout=25000, state="visible")
+        text = result.inner_text().strip().lower()
         if "successful" in text:
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
@@ -153,14 +155,14 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             update_automation_result(task_id=task_id, status="success", description="Recharge successful")
         elif "insufficient" in text:
             logger.error("Recharge failed: backend balance insufficient.")
-            update_automation_result(task_id=task_id, status="failed", description="Backend balance insufficient.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance for {BACKEND_NAME}")
             raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
         else:
             logger.warning(f"Unexpected recharge response: {text}")
             insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected recharge response.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect result dialog after recharge.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id):
@@ -193,8 +195,9 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     redeem.locator('input[type="button"][value="Redeem"]').click()
 
     try:
-        page.locator("#mb_con").wait_for(timeout=25000)
-        text = page.locator("#mb_con").inner_text().lower().strip()
+        result = page.locator("#mb_con")
+        result.wait_for(timeout=25000, state="visible")
+        text = result.inner_text().strip().lower()
         if "successful" in text:
             logger.info("Withdraw successful.")
             insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
@@ -208,7 +211,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
             update_automation_result(task_id=task_id, status="failed", description="Unexpected withdrawal response.")
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect result dialog after withdraw.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):

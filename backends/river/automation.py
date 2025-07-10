@@ -39,7 +39,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         alert.wait_for(timeout=8000, state="visible")
         text = alert.inner_text().strip().lower()
         if "incorrect login or password" in text:
-            update_automation_result(task_id=task_id, status="failed", description="Incorrect login credentials.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}.")
             logger.error("Incorrect login credentials.")
             raise Exception(f"Incorrect credentials for backend: {backend.name}")
     except PlaywrightTimeoutError:
@@ -127,7 +127,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         if alert.get_attribute("class").split().count("alert-error"):
             if "not enough credits" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
-                update_automation_result(task_id=task_id, status="failed", description="Insufficient backend balance.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                 raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
         elif alert.get_attribute("class").split().count("alert-success"):
             if "amount added" in text:
@@ -137,13 +137,13 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                 update_order_automation_status(order_id, "finished")
             else:
                 logger.warning(f"Unexpected recharge response: {text}")
-                update_automation_result(task_id=task_id, status="failed", description="Unexpected recharge response.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
                 insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
         else:
             logger.warning("Matched an alert, but unknown type: %s", text)
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected alert detected.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected alert detected on {BACKEND_NAME}")
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect recharge response.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}.")
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
@@ -231,14 +231,14 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                 insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
             else:
                 logger.warning(f"Unexpected withdrawal response: {text}")
-                update_automation_result(task_id=task_id, status="failed", description="Unexpected withdrawal response.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
                 insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
         else:
             # in the extremely unlikely event it matched neither class…
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected error.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected alert detected on {BACKEND_NAME}.")
             logger.warning("⚠️ Matched an alert, but unknown type: %s", text)
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect withdraw response.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}.")
 
 
 @with_browser

@@ -66,7 +66,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 page.reload(wait_until="domcontentloaded")
             elif "the user name or password is incorrect" in text:
                 logger.error("Incorrect login credentials.")
-                update_automation_result(task_id=task_id, status="failed", description="Incorrect login credentials")
+                update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}")
                 raise Exception(f"Incorrect credentials for backend: {backend.name}")
             else:
                 logger.info(f"Unknown dialog message: {text}")
@@ -207,16 +207,16 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
             text = msg.inner_text().strip().lower()
             if "not enougn balance" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
-                update_automation_result(task_id=task_id, status="failed", description="Insufficient backend balance.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                 raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
             if "form is being submitted" in text:
-                update_automation_result(task_id=task_id, status="failed", description="Form submission error. Try again later.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
                 return
 
     # verify deposit
     try:
         invoice = page.locator("#invoiceModel")
-        invoice.wait_for(timeout=10_000, state="visible")
+        invoice.wait_for(timeout=25000, state="visible")
         deposit = invoice.locator("p", has=page.locator("label", has_text="DEPOSIT:"))
         deposit.wait_for(timeout=5_000, state="visible")
         txt = deposit.inner_text().strip().lower()
@@ -228,11 +228,11 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         else:
             logger.warning(f"Unexpected recharge response: {txt}")
             insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url))
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected recharge response.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect dialog after recharge.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id):
@@ -278,11 +278,11 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
                     insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url))
                 else:
                     logger.warning(f"Unexpected withdrawal response: {text}")
-                    update_automation_result(task_id=task_id, status="failed", description="Unexpected withdrawal response.")
+                    update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
                     insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
         logger.error("Failed to detect result dialog after account withdrawal.")
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect result.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
         insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url))
 
 

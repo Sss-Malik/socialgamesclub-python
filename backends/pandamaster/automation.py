@@ -70,7 +70,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             elif "the account or password you filled in is incorrect" in text:
 
                 logger.error("Incorrect login credentials.")
-                update_automation_result(task_id=task_id, status="failed", description="Incorrect login credentials.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}.")
                 raise Exception(f"Incorrect login credentials for backend: {backend.name}")
         except PlaywrightTimeoutError:
             logger.info("Login likely successful (no error dialog detected).")
@@ -146,8 +146,8 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     recharge.locator("a", has_text="Recharge").click()
 
     try:
-        page.locator("#mb_con").wait_for(timeout=5_000, state="visible")
-        result = page.locator("#mb_msg").inner_text().lower()
+        page.locator("#mb_con").wait_for(timeout=25000, state="visible")
+        result = page.locator("#mb_msg").inner_text().strip().lower()
         if "successful" in result:
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
@@ -155,18 +155,18 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             update_order_automation_status(order_id, "finished")
         elif "insufficient" in result:
             logger.error("Recharge failed: backend balance insufficient.")
-            update_automation_result(task_id=task_id, status="failed", description="Insufficient backend balance.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
             raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
         elif "unknown" in result:
             logger.warning("Unknown error.")
-            update_automation_result(task_id=task_id, status="failed", description="Unknown error.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
             insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url))
         else:
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected recharge response.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
             logger.warning(f"Unexpected recharge response: {result}")
             insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect dialog after recharge.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 
 
@@ -247,10 +247,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
         else:
             logger.warning(f"Unexpected withdrawal response: {text}")
-            update_automation_result(task_id=task_id, status="failed", description="Unexpected withdraw response.")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdraw response on {BACKEND_NAME}")
             insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url))
     except PlaywrightTimeoutError:
-        update_automation_result(task_id=task_id, status="failed", description="Failed to detect dialog after withdraw.")
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
 
 
 
