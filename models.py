@@ -1,5 +1,5 @@
 # casino_automation/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL
 from sqlalchemy.orm import relationship
 from db import Base
 
@@ -30,14 +30,14 @@ class BackendAccount(Base):
     is_assigned = Column(Boolean, default=False)
     backend_id = Column(Integer, ForeignKey("backend_games.id"))
     game_id = Column(Integer, nullable=True)
-    user_id = Column(Integer, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime)
 
     backend = relationship("BackendGame", back_populates="accounts")
-
+    user = relationship("User", back_populates="backend_accounts")
 
 class Log(Base):
     __tablename__ = "logs"
@@ -48,3 +48,59 @@ class Log(Base):
     source_url = Column(String(255))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    first_name = Column(String(255), nullable=False)
+    last_name = Column(String(255), nullable=False)
+    phone = Column(String(255), nullable=False)
+    user_name = Column(String(255))
+    phone_number = Column(String(255))
+    email = Column(String(255), nullable=False)
+    referral_id = Column(String(255))
+    referred_by = Column(BigInteger)
+    email_verified_at = Column(DateTime)
+    password = Column(String(255), nullable=False)
+    profile_pic = Column(String(255))
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_ban = Column(Boolean, nullable=False, default=False)
+    last_login_at = Column(DateTime)
+    last_login_ip = Column(String(45))
+    deleted_at = Column(DateTime)
+    remember_token = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    is_verified = Column(Boolean, nullable=False, default=False)
+
+    # Relationship
+    backend_accounts = relationship("BackendAccount", back_populates="user")
+    deposits = relationship("Deposit", back_populates="user")
+
+class Deposit(Base):
+    __tablename__ = "deposits"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=False)
+    payment_id = Column(String(255), nullable=True)
+    order_id = Column(String(255), nullable=True)
+    original_price = Column(DECIMAL(10, 2), nullable=True)
+    description = Column(String(255), nullable=True)
+    pay_price = Column(DECIMAL(10, 2), nullable=True)
+    actually_paid = Column(DECIMAL(10, 2), nullable=True)
+    outcome_price = Column(DECIMAL(10, 2), nullable=True)
+    pay_currency = Column(String(10), nullable=True)
+    type = Column(String(255), nullable=True)
+    status = Column(String(255), nullable=False, default="pending")
+    automation_status = Column(String(255), nullable=True, default="pending")
+    payin_address = Column(String(255), nullable=True)
+    payin_hash = Column(String(255), nullable=True)
+    payout_hash = Column(String(255), nullable=True)
+    network_fee = Column(DECIMAL(10, 2), nullable=True)
+    service_fee = Column(DECIMAL(10, 2), nullable=True)
+    invoice_url = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="deposits")

@@ -2,10 +2,10 @@ import importlib
 import inspect
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, Header
 from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
-import logging
 from settings import APP_KEY
 from .tasks import invoke_action
-from .dispatcher import invoke_backend_action
+
+from common.utils.db_actions import get_order
 
 from celery_app import celery_app
 from celery.result import AsyncResult
@@ -56,15 +56,30 @@ async def create_account(
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
-    x_app_key: str = Header(None)
+    x_order_id: str = Header(None)
 ):
-    if x_app_key != APP_KEY:
+
+    order = get_order(x_order_id)
+
+    if not order:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid APP_KEY"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
         )
 
-    task = invoke_action.delay(req.backend, "recharge-account", account_id=req.account_id, count=req.count)
+    if order.status != "finished":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order status is not 'finished'"
+        )
+
+    if order.automation_status == "finished":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order automation_status is 'finished'"
+        )
+
+    task = invoke_action.delay(req.backend, "recharge-account", account_id=req.account_id, count=req.count, order_id=x_order_id)
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "recharge-account"}
 
 @app.post("/automation/withdraw-account")

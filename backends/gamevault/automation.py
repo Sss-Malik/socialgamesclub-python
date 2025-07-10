@@ -11,7 +11,7 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status
 from common.utils.browser import with_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -167,8 +167,15 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str):
     logger.info(f"Account read data: {data}")
 
 
-def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_id: str):
+def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_id: str, order_id):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={amount}")
+
+    try:
+        announcement_box = page.locator("div.el-message-box.security-announcement-box")
+        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.locator("button:has-text('OK')").click()
+    except PlaywrightTimeoutError:
+        pass
 
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
@@ -211,6 +218,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
+            update_order_automation_status(order_id, "finished")
         else:
             logger.warning(f"Unexpected recharge response: {txt}")
             insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url))
@@ -298,7 +306,7 @@ def action_create_account(page: Page):
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
 @with_browser
-def action_recharge_account(page: Page, count: int, account_id: str):
+def action_recharge_account(page: Page, count: int, account_id: str, order_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -311,7 +319,7 @@ def action_recharge_account(page: Page, count: int, account_id: str):
             source_url=str(page.url),
         )
         _login_and_navigate(page, logger, backend)
-        _recharge_account(page, logger, count, account_id)
+        _recharge_account(page, logger, count, account_id, order_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(

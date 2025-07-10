@@ -36,6 +36,7 @@ def parse_arguments():
     parser.add_argument("--count", "-c", type=int, default=1,
                         help="Number of times to perform the action (default: 1).")
     parser.add_argument("--account", help="Account ID used by certain actions like recharge-account.")
+    parser.add_argument("--order_id", help="Order ID used by certain actions like recharge-account.")
 
     return parser.parse_args(), parser
 
@@ -84,6 +85,8 @@ def main():
                 print("Error: --account is required for this action.")
                 sys.exit(1)
             kwargs["account_id"] = args.account
+        elif name == "order_id":
+            kwargs["order_id"] = args.order_id
         else:
             print(f"Error: Unsupported parameter '{name}' in function '{func_name}'.")
             sys.exit(1)

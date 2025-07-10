@@ -8,7 +8,7 @@ from backends.vblink.utils.actions import click_set_score
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_order_automation_status
 from common.utils.browser import with_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -105,7 +105,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
             break
 
 
-def _recharge_account(page: Page, logger: logging.Logger, points: int, account_id: str):
+def _recharge_account(page: Page, logger: logging.Logger, points: int, account_id: str, order_id):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
@@ -165,6 +165,7 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             elif "sucessful operation" in text:
                 logger.info("Recharge successful.")
                 insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
+                update_order_automation_status(order_id, "finished")
             else:
                 logger.warning(f"Unexpected recharge response: {text}")
                 insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
@@ -316,7 +317,7 @@ def action_create_account(page: Page):
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
 @with_browser
-def action_recharge_account(page: Page, count: int, account_id: str):
+def action_recharge_account(page: Page, count: int, account_id: str, order_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -329,7 +330,7 @@ def action_recharge_account(page: Page, count: int, account_id: str):
             source_url=str(page.url),
         )
         _login_and_navigate(page, logger, backend)
-        _recharge_account(page, logger, count, account_id)
+        _recharge_account(page, logger, count, account_id, order_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
