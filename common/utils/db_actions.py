@@ -1,6 +1,6 @@
 # casino_automation/crud.py
 from db import SessionLocal
-from models import BackendGame, BackendAccount, Log, Deposit
+from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult
 from sqlalchemy.orm import joinedload
 
 def get_backend(name):
@@ -41,7 +41,10 @@ def get_backend_account(account_id):
 def get_order(order_id):
     db = SessionLocal()
     try:
-        return db.query(Deposit).filter(Deposit.order_id == order_id).first()
+        return db.query(Deposit)\
+            .options(joinedload(Deposit.user))\
+            .filter(Deposit.order_id == order_id)\
+            .first()
     finally:
         db.close()
 
@@ -88,5 +91,47 @@ def update_game_id_by_username(username: str, new_game_id: int):
     except Exception as e:
         db.rollback()
         raise e
+    finally:
+        db.close()
+
+
+def insert_automation_result(
+    user_id=None,
+    description=None,
+    task_id=None,
+    status="pending",
+    data=None
+):
+    db = SessionLocal()
+    try:
+        result = AutomationResult(
+            user_id=user_id,
+            description=description,
+            task_id=task_id,
+            status=status,
+            data=data
+        )
+        db.add(result)
+        db.commit()
+        db.refresh(result)
+        return result
+    finally:
+        db.close()
+
+
+def update_automation_result(task_id, **fields):
+    db = SessionLocal()
+    try:
+        result = db.query(AutomationResult).filter(AutomationResult.task_id == task_id).first()
+        if not result:
+            return None
+
+        for key, value in fields.items():
+            if hasattr(result, key):
+                setattr(result, key, value)
+
+        db.commit()
+        db.refresh(result)
+        return result
     finally:
         db.close()

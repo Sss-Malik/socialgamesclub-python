@@ -77,6 +77,7 @@ class User(Base):
     # Relationship
     backend_accounts = relationship("BackendAccount", back_populates="user")
     deposits = relationship("Deposit", back_populates="user")
+    automation_results = relationship("AutomationResult", back_populates="user")
 
 class Deposit(Base):
     __tablename__ = "deposits"
@@ -104,3 +105,19 @@ class Deposit(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="deposits")
+
+
+class AutomationResult(Base):
+    __tablename__ = "automation_results"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
+    description = Column(String(255), nullable=True)
+    task_id = Column(String(36), nullable=True)
+    status = Column(String(255), nullable=True, default="pending")
+    data = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Optional: relationship to User
+    user = relationship("User", back_populates="automation_results")

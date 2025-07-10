@@ -5,7 +5,7 @@ from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccou
 from settings import APP_KEY
 from .tasks import invoke_action
 
-from common.utils.db_actions import get_order
+from common.utils.db_actions import get_order, insert_automation_result
 
 from celery_app import celery_app
 from celery.result import AsyncResult
@@ -51,6 +51,7 @@ async def create_account(
             detail="Invalid APP_KEY"
         )
     task = invoke_action.delay(req.backend, "create-account")
+    insert_automation_result(description="Initiate account creation", task_id=task.id)
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "create-account"}
 
 @app.post("/automation/recharge-account")
@@ -80,6 +81,7 @@ async def recharge_account(
         )
 
     task = invoke_action.delay(req.backend, "recharge-account", account_id=req.account_id, count=req.count, order_id=x_order_id)
+    insert_automation_result(user_id=order.user.id, description="Initiate account recharge", task_id=task.id)
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "recharge-account"}
 
 @app.post("/automation/withdraw-account")
@@ -95,6 +97,7 @@ async def withdraw_account(
         )
 
     task = invoke_action.delay(req.backend, "withdraw-account", account_id=req.account_id, count=req.count)
+    insert_automation_result(task_id=task.id, description="Initiate account withdrawal")
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "withdraw-account"}
 
 
@@ -110,6 +113,7 @@ async def read_account(
         )
 
     task = invoke_action.delay(req.backend, "read-account", account_id=req.account_id)
+    insert_automation_result(task_id=task.id, description="Initiate account read")
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "read-account"}
 
 
