@@ -16,3 +16,7 @@ class WithdrawAccountRequest(BaseModel):
 class ReadAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")
     account_id: str = Field(..., example="abc123")
+
+class RechargeFreeplayRequest(BaseModel):
+    backend: str = Field(..., example="juwa")
+    account_id: str = Field(..., example="abc123")

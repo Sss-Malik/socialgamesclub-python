@@ -1,11 +1,11 @@
 import importlib
 import inspect
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, status, Header
-from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest
+from .schemas import CreateAccountRequest, RechargeAccountRequest, WithdrawAccountRequest, ReadAccountRequest, RechargeFreeplayRequest
 from settings import APP_KEY
 from .tasks import invoke_action
 
-from common.utils.db_actions import get_order, insert_automation_result
+from common.utils.db_actions import get_order, insert_automation_result, get_backend_account
 
 from celery_app import celery_app
 from celery.result import AsyncResult
@@ -117,36 +117,45 @@ async def read_account(
     return {"status": "scheduled", "task_id": task.id, **req.dict(), "action": "read-account"}
 
 
-@app.post("/automation/results")
-async def receive_webhook(request: Request):
-    """
-    A testing endpoint to receive and log webhook payloads from automation jobs.
-    """
-    payload = await request.json()
-    print("📬 Webhook received:\n%s", payload)
+@app.post("/automation/freeplay")
+async def recharge_freeplay(
+        req: RechargeFreeplayRequest,
+):
+    backend_account = get_backend_account(req.account_id)
 
-    # For testing purposes, return the same payload back
+    if not backend_account or not backend_account.user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account not found"
+        )
+
+    user = backend_account.user
+
+    if user.freeplay_transferred:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account already received freeplay"
+        )
+
+    # Handle freeplay_amount logic
+    if user.freeplay_amount == 0:
+        return {"status": "skipped", "reason": "Freeplay amount is 0"}
+
+    count = user.freeplay_amount if user.freeplay_amount is not None else 1
+
+    task = invoke_action.delay(
+        req.backend,
+        "freeplay-account",
+        account_id=req.account_id,
+        count=count
+    )
+
+    insert_automation_result(task_id=task.id, description="Initiate account freeplay", user_id=user.id)
+
     return {
-        "status": "received",
-        "received_payload": payload
+        "status": "scheduled",
+        "task_id": task.id,
+        **req.dict(),
+        "action": "freeplay-account"
     }
 
-@app.get("/automation/tasks/{task_id}")
-async def get_task_status(task_id: str):
-    """
-    Retrieve status and (if ready) result or error of a previously‐scheduled Celery task.
-    """
-    async_result = AsyncResult(task_id, app=celery_app)
-
-    payload = {
-        "task_id": task_id,
-        "status": async_result.status,  # e.g. PENDING, STARTED, SUCCESS, FAILURE
-    }
-
-    if async_result.status == "SUCCESS":
-        payload["result"] = async_result.result
-    elif async_result.status == "FAILURE":
-        # celery stores the exception instance in .result
-        payload["error"] = str(async_result.result)
-
-    return payload

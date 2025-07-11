@@ -135,3 +135,28 @@ def update_automation_result(task_id, **fields):
         return result
     finally:
         db.close()
+
+
+def mark_freeplay_transferred(account_id: str) -> bool:
+    db = SessionLocal()
+    try:
+        backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user))\
+            .filter(
+                BackendAccount.username == account_id,
+                BackendAccount.deleted_at == None
+            )\
+            .first()
+
+        if not backend_account or not backend_account.user:
+            return False  # account or user not found
+
+        backend_account.user.freeplay_transferred = True
+        db.commit()
+        return True  # successfully updated
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating freeplay_transferred: {e}")
+        return False
+    finally:
+        db.close()

@@ -12,7 +12,7 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status, update_automation_result
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status, update_automation_result, mark_freeplay_transferred
 from common.utils.browser import with_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -235,6 +235,73 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 
+
+def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id):
+    logger.info(f"Initiating recharge: account_id={account_id}, amount={amount}")
+
+    try:
+        announcement_box = page.locator("div.el-message-box.security-announcement-box")
+        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.locator("button:has-text('OK')").click()
+    except PlaywrightTimeoutError:
+        pass
+
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+
+    click_recharge_for_account(page, account_id, logger)
+
+    # fill amount
+    page.locator("//label[text()='Recharge Amount']/following-sibling::div//input")\
+        .fill(str(amount))
+
+    if DEBUG:
+        input("Debug mode: press enter to continue recharge.")
+
+    # confirm dialog
+    dlg = page.locator("div.el-dialog",
+                      has=page.locator("span.el-dialog__title", has_text="Please confirm your recharge & details!"))
+    confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+
+    messages = page.locator("p.el-message__content").all()
+    for msg in messages:
+        if msg.is_visible():
+            text = msg.inner_text().strip().lower()
+            if "not enougn balance" in text:
+                logger.error("Recharge failed: backend balance insufficient.")
+                update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
+                raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+            if "form is being submitted" in text:
+                update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
+                return
+
+    # verify deposit
+    try:
+        invoice = page.locator("#invoiceModel")
+        invoice.wait_for(timeout=25000, state="visible")
+        deposit = invoice.locator("p", has=page.locator("label", has_text="DEPOSIT:"))
+        deposit.wait_for(timeout=5_000, state="visible")
+        txt = deposit.inner_text().strip().lower()
+        if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
+            logger.info("Recharge successful.")
+            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
+            update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
+            mark_freeplay_transferred(account_id)
+        else:
+            logger.warning(f"Unexpected recharge response: {txt}")
+            insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url))
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+    except PlaywrightTimeoutError:
+        logger.error("No recharge confirmation dialog appeared.")
+        insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
+
+
+
 def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={amount}")
 
@@ -343,6 +410,34 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
+
+
+@with_browser
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
+    backend = get_backend(BACKEND_NAME)
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
+            source_url=str(page.url),
+        )
+        _login_and_navigate(page, logger, backend, task_id)
+        _freeplay_account(page, logger, count, account_id, task_id)
+    except (PlaywrightTimeoutError, Exception) as e:
+        logger.critical("Error during account recharge: %s", e, exc_info=True)
+        insert_log(
+            "error",
+            f"Error during account recharge: {e}",
+            source_url=str(page.url),
+        )
+    finally:
+        logger.info("Recharge-account action completed.")
+        insert_log("info", "Recharge account action completed", source_url=str(page.url))
+
 
 @with_browser
 def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
