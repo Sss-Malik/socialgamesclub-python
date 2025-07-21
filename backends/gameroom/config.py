@@ -8,6 +8,7 @@ BACKEND_SIGNATURE = "GR"
 
 # — Login credentials (hard-coded for this backend) —
 LOGIN_URL = "https://agentserver1.gameroom777.com/admin/login"
+MAIN_URL = "https://agentserver1.gameroom777.com/admin"
 USERNAME  = "TestGR159"
 PASSWORD  = "TestGR1122@"
 MAX_CAPTCHA_RETRIES = 5

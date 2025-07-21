@@ -12,7 +12,7 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status, update_automation_result, mark_freeplay_transferred
-from common.utils.browser import with_browser
+from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
@@ -27,7 +27,23 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
 
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
+
     page.goto(login_url, wait_until="domcontentloaded")
+
+    try:
+        page.locator(MAIN_PAGE_EL).wait_for(state="attached", timeout=10000)
+        logger.info("Existing session detected; skipping login.")
+        game_user = page.locator('a', has_text="Game User")
+        game_user.wait_for(state="visible", timeout=20_000)
+        game_user.click()
+
+        user_mgmt = page.locator(USER_MANAGEMENT_EL)
+        user_mgmt.wait_for(state="visible", timeout=20_000)
+        user_mgmt.click()
+        return
+    except PlaywrightTimeoutError:
+        logger.info("No existing session; proceeding with login.")
+
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
@@ -87,6 +103,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     user_mgmt.wait_for(state="visible", timeout=20_000)
     user_mgmt.click()
     logger.info("Login and navigation successful.")
+
+    admin_token = page.evaluate("() => sessionStorage.getItem('token')")
+    expires_time = page.evaluate("() => sessionStorage.getItem('expires_time')")
+    logger.info(f"Admin-Token: {admin_token}, expires_time: {expires_time}")
 
 
 
@@ -315,7 +335,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
 
 
-@with_browser
+@with_persistent_browser
 def action_create_account(page: Page, task_id):
     backend = get_backend(BACKEND_NAME)
     count = int(backend.accounts_creation_pd)
@@ -346,7 +366,7 @@ def action_create_account(page: Page, task_id):
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
-@with_browser
+@with_persistent_browser
 def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -374,7 +394,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 
-@with_browser
+@with_persistent_browser
 def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -400,7 +420,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
-@with_browser
+@with_persistent_browser
 def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -426,8 +446,8 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
-@with_browser
-def action_read_account(page: Page, account_id: str, task_id):
+@with_persistent_browser
+def action_read_account(page: Page, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)

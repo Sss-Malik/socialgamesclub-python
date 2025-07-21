@@ -2,6 +2,7 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL
 from sqlalchemy.orm import relationship
 from db import Base
+from datetime import datetime
 
 class BackendGame(Base):
     __tablename__ = "backend_games"
