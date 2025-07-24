@@ -23,6 +23,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     page.goto(backend.backend_url, wait_until="domcontentloaded")
 
+    page.locator(LOGIN_ACCOUNT).wait_for(timeout=20000)
+
     session = wait_for_valid_session(backend.name, logger)
 
     if session:

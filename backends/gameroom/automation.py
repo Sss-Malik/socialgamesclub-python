@@ -86,6 +86,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 if DEBUG:
                     input("Debug mode: Solve CAPTCHA manually and press enter.")
                 else:
+                    page.wait_for_timeout(2000)
                     text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
                     if not text or text == 0:
                         logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
@@ -103,38 +104,37 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                         if not DEBUG:
                             solver.report_incorrect_image_captcha()
                             page.reload(wait_until="domcontentloaded")
-                        elif "username or password error" in text:
-                            logger.error("Incorrect login credentials.")
-                            update_automation_result(task_id=task_id, status="failed",
+                    elif "username or password error" in text:
+                        logger.error("Incorrect login credentials.")
+                        update_automation_result(task_id=task_id, status="failed",
                                                      description=f"Incorrect login for {BACKEND_NAME}")
-                            raise Exception(f"Incorrect login credentials for backend: {backend.name}")
-                        else:
-                            logger.info(f"Unknown dialog message: {text}")
-                            break
+                        raise Exception(f"Incorrect login credentials for backend: {backend.name}")
+                    else:
+                        logger.info(f"Unknown dialog message: {text}")
+                        break
                 except PlaywrightTimeoutError:
                     logger.info("Login likely successful (no error dialog detected).")
                     break
 
-                logger.info("Login successful, navigating to user management page.")
-                page.locator(MAIN_PAGE_EL).wait_for(state="attached", timeout=20_000)
+            logger.info("Login successful, navigating to user management page.")
+            page.locator(MAIN_PAGE_EL).wait_for(state="attached", timeout=20_000)
 
-                admin_token = page.evaluate("() => sessionStorage.getItem('token')")
-                expires_time = page.evaluate("() => sessionStorage.getItem('expires_time')")
-                new_session = create_backend_session(backend.name, token=admin_token, expires=expires_time)
+            admin_token = page.evaluate("() => sessionStorage.getItem('token')")
+            expires_time = page.evaluate("() => sessionStorage.getItem('expires_time')")
+            new_session = create_backend_session(backend.name, token=admin_token, expires=expires_time)
 
-                increment_active_tasks_count(new_session.id)
+            increment_active_tasks_count(new_session.id)
 
-                try:
-                    game_user = page.locator('a', has_text="Game User")
-                    game_user.wait_for(state="visible", timeout=20_000)
-                    game_user.click()
-
-                    user_mgmt = page.locator(USER_MANAGEMENT_EL)
-                    user_mgmt.wait_for(state="visible", timeout=20_000)
-                    user_mgmt.click()
-                    logger.info("Login and navigation successful.")
-                finally:
-                    decrement_active_tasks_count(new_session.id)
+            try:
+                game_user = page.locator('a', has_text="Game User")
+                game_user.wait_for(state="visible", timeout=20_000)
+                game_user.click()
+                user_mgmt = page.locator(USER_MANAGEMENT_EL)
+                user_mgmt.wait_for(state="visible", timeout=20_000)
+                user_mgmt.click()
+                logger.info("Login and navigation successful.")
+            finally:
+                decrement_active_tasks_count(new_session.id)
 
         finally:
             release_login_lock(backend.name)
