@@ -338,6 +338,8 @@ def action_create_account(page: Page, task_id, backend):
             f"Error during account creation: {e}",
             source_url=str(page.url),
         )
+        update_automation_result(task_id=task_id, description=f"Account creation failed. {e}", status="failed")
+
     finally:
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
@@ -364,6 +366,8 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
+        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
+
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
@@ -391,6 +395,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
+        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
@@ -419,6 +424,8 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             f"Error during account withdrawal: {e}",
             source_url=str(page.url),
         )
+        update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}")
+
     finally:
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
@@ -444,6 +451,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
             f"Error during account read: {e}",
             source_url=str(page.url),
         )
+        update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed")
     finally:
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url))
