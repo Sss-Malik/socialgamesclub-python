@@ -16,7 +16,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred
-from common.utils.browser import with_browser
+from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
@@ -32,6 +32,15 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
     page.goto(login_url, wait_until="domcontentloaded")
+    
+    try:
+        if page.locator(MAIN_PAGE_EL).is_visible(timeout=5_000):
+            logger.info("Existing session detected; skipping login.")
+            page.frame_locator(LEFT_IFRAME).locator(USER_MANAGEMENT_XPATH).click(timeout=20_000)
+            return
+    except PlaywrightTimeoutError:
+        logger.info("No existing session; proceeding with login.")
+
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
@@ -307,8 +316,8 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
 
 
-@with_browser
-def action_create_account(page: Page, task_id):
+@with_persistent_browser
+def action_create_account(page: Page, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     count = int(backend.accounts_creation_pd)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -338,8 +347,8 @@ def action_create_account(page: Page, task_id):
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
-@with_browser
-def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id):
+@with_persistent_browser
+def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -365,8 +374,8 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
 
-@with_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
+@with_persistent_browser
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -392,8 +401,8 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
 
-@with_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
+@with_persistent_browser
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -418,8 +427,8 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
-@with_browser
-def action_read_account(page: Page, account_id: str, task_id):
+@with_persistent_browser
+def action_read_account(page: Page, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)

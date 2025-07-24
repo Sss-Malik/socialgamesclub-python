@@ -8,7 +8,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "FK"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://firekirin.xyz:8888/default.aspx"
+LOGIN_URL = "https://firekirin.xyz:8888/Cashier.aspx"
 USERNAME  = "TestFK159"
 PASSWORD  = "Test_159872"
 MAX_CAPTCHA_RETRIES = 5

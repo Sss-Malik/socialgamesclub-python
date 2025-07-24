@@ -9,4 +9,4 @@ def invoke_backend_action(backend: str, action: str, **kwargs):
     if not hasattr(mod, fn_name):
         raise ValueError(f"No such action '{fn_name}' in {mod}")
     fn = getattr(mod, fn_name)
-    return fn(**kwargs)
+    return fn(backend=backend, **kwargs)

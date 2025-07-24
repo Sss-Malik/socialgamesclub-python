@@ -7,7 +7,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "JW"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://ht.juwa777.com/login"
+LOGIN_URL = "https://ht.juwa777.com/HomeDetail"
 USERNAME  = "TestJW159"
 PASSWORD  = "Test1234"
 

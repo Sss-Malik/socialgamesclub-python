@@ -1,47 +1,60 @@
-from functools import wraps
-from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
-from settings import HEADLESS, DEBUG
+import functools
+from playwright.sync_api import Page
+from common.utils.playwright_pool import BROWSER, PAGE_SEM  # see below
+import threading
+
+_persistent_contexts: dict[str, any] = {}
+_contexts_lock = threading.Lock()
 
 
-def with_browser(func):
-    """
-    Decorator to manage Playwright browser lifecycle: launch before calling the wrapped
-    function and close when done. The wrapped function must accept a `page: Page` as its first argument.
-    """
-    @wraps(func)
+def get_or_create_context(backend: str):
+    with _contexts_lock:
+        if backend in _persistent_contexts:
+            return _persistent_contexts[backend]
+
+        # Only one thread can reach here per backend
+        context = BROWSER.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/115.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 720},
+            locale="en-US",
+            color_scheme="light",
+        )
+        print(f"[INFO] Created new context for backend={backend}")
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
+        _persistent_contexts[backend] = context
+        return context
+
+def with_persistent_browser(fn):
+    @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        # Initialize Playwright and browser
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                headless=HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
-                    "--no-sandbox",
-                ]
-            )
-            # Create browser context
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/115.0.0.0 Safari/537.36"
-                ),
-                viewport={"width": 1280, "height": 720},
-                locale="en-US",
-                color_scheme="light",
-            )
-            # Evade automation detection
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
+        backend = kwargs.get("backend")
+        if not backend:
+            raise ValueError("with_persistent_browser requires a 'backend' keyword argument")
 
-            # Open a new page
-            page: Page = context.new_page()
+        context = get_or_create_context(backend)
+
+        PAGE_SEM.acquire()
+        page = None
+        try:
+            page = context.new_page()
+            return fn(page=page, *args, **kwargs)
+        except Exception as e:
+            print(f"[ERROR] Playwright function error for backend={backend}: {e}")
+            raise
+        finally:
             try:
-                # Call the wrapped function, passing the page
-                return func(page, *args, **kwargs)
-            finally:
-                # Always close browser
-                browser.close()
+                if page:
+                    page.close()
+            except Exception as close_err:
+                # Log warning instead of crashing the app
+                print(f"[WARN] Failed to close Playwright page: {close_err}")
+            PAGE_SEM.release()
+
     return wrapper
+

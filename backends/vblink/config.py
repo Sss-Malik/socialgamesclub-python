@@ -7,7 +7,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "VB"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://gm.vblink777.club/#/login"
+LOGIN_URL = "https://gm.vblink777.club/#/index"
 USERNAME  = "TestVB159"
 PASSWORD  = "Test12345"
 USER_MANAGEMENT_URL = "https://gm.vblink777.club/#/manage-user/account"

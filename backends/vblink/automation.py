@@ -8,56 +8,117 @@ from backends.vblink.utils.actions import click_set_score
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
+from common.utils.poll_utils import wait_for_valid_session, wait_for_active_tasks_to_zero
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_order_automation_status, \
-    update_automation_result, mark_freeplay_transferred
-from common.utils.browser import with_browser
+    update_automation_result, mark_freeplay_transferred, increment_active_tasks_count, decrement_active_tasks_count, \
+    invalidate_latest_session, create_backend_session
+from common.utils.browser import with_persistent_browser
+from backends.ultrapanda.utils.session import inject_session_token, validate_session_token
+from common.utils.redis_utils import acquire_login_lock, release_login_lock
 
 from settings import APP_ENV, HEADLESS, DEBUG
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
-    logger.info("Starting login process.")
-    logger.debug("Fetching backend details from db...")
-    username = backend.username or USERNAME
-    password = backend.password or PASSWORD
-    login_url = backend.backend_url or LOGIN_URL
 
-    logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
-    logger.debug("Navigating to login page at: %s", LOGIN_URL)
-    page.goto(login_url, wait_until="domcontentloaded")
+    page.goto(backend.backend_url, wait_until="domcontentloaded")
 
-    page.locator(LOGIN_ACCOUNT).fill(username)
-    page.locator(LOGIN_PASSWORD).fill(password)
+    session = wait_for_valid_session(backend.name, logger)
 
-    if DEBUG:
+    if session:
+        logger.info("Valid session found, attempting to inject...")
+        inject_session_token(page, session.token)
 
-        input("Debug mode: Solve CAPTCHA manually and press enter.")
-
-
-    page.locator(LOGIN_BUTTON).click()
-
-    try:
-        dialog_el = page.locator("p.el-message__content")
-        dialog_el.wait_for(timeout=5000, state="visible")
-        text = dialog_el.inner_text().strip().lower()
-        if "incorrect" in text:
-
-            logger.error("Incorrect login credentials.")
-            update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}.")
-            raise Exception(f"Incorrect credentials for backend: {backend.name}")
+        if validate_session_token(page, logger):
+            increment_active_tasks_count(session.id)
+            try:
+                logger.info("Session injection and validation successful")
+                page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+                return
+            finally:
+                decrement_active_tasks_count(session.id)
         else:
-            logger.info(f"Unknown dialog message: {text}")
-    except PlaywrightTimeoutError:
-        logger.info("Login likely successful (no error dialog detected).")
+            logger.warning("Session injection failed. Invalidating session.")
+            if wait_for_active_tasks_to_zero(session.id, logger=logger):
+                logger.info("Session is now free, invalidating it.")
+                invalidate_latest_session(backend.name)
+            else:
+                update_automation_result(task_id=task_id, status="failed",
+                                         description="Session still in use. Aborting to avoid conflicts")
+                raise Exception("Session still in use after waiting. Aborting to avoid conflicts")
 
-    logger.info("Login successful, navigating to user management page.")
 
-    page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-    logger.info("✅ Login successful.")
+    logger.info("No valid session. Attempting to acquire login lock.")
+    if acquire_login_lock(backend.name):
+        try:
+            logger.info("Lock acquired. Proceeding with login.")
 
-    page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-    logger.info("Login and navigation successful.")
+            page.goto(backend.backend_url, wait_until="domcontentloaded")
 
+            username = backend.username or USERNAME
+            password = backend.password or PASSWORD
+
+            page.locator(LOGIN_ACCOUNT).fill(username)
+            page.locator(LOGIN_PASSWORD).fill(password)
+
+            if DEBUG:
+                input("Debug mode: Solve CAPTCHA manually and press enter.")
+
+            page.locator(LOGIN_BUTTON).click()
+
+            try:
+                dialog_el = page.locator("p.el-message__content")
+                dialog_el.wait_for(timeout=5000, state="visible")
+                text = dialog_el.inner_text().strip().lower()
+                if "incorrect" in text:
+
+                    logger.error("Incorrect login credentials.")
+                    update_automation_result(task_id=task_id, status="failed",
+                                             description=f"Incorrect login for {BACKEND_NAME}.")
+                    raise Exception(f"Incorrect credentials for backend: {backend.name}")
+                else:
+                    logger.info(f"Unknown dialog message: {text}")
+            except PlaywrightTimeoutError:
+                logger.info("Login likely successful (no error dialog detected).")
+
+            page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+            logger.info("Login successful, navigating to user management page.")
+
+            token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
+            new_session = create_backend_session(backend.name, token=token)
+
+            increment_active_tasks_count(new_session.id)
+            try:
+                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+                logger.info("Login and navigation successful.")
+            finally:
+                decrement_active_tasks_count(new_session.id)
+
+        finally:
+            release_login_lock(backend.name)
+    else:
+        logger.info("Another task is logging in. Waiting for session...")
+        session = wait_for_valid_session(backend.name, logger, timeout=40, interval=2)
+        if not session:
+            logger.error("Timeout waiting for session from another task")
+            update_automation_result(task_id=task_id, status="failed",
+                                     description="Timeout waiting for session from another task")
+            raise Exception("Timeout waiting for session")
+        inject_session_token(page, session.token)
+        if not validate_session_token(page, logger):
+            update_automation_result(task_id=task_id, status="failed", description="Session after wait was invalid")
+            raise Exception("Session after wait was invalid")
+
+        increment_active_tasks_count(session.id)
+        try:
+            logger.info("Session from another task injected and validated.")
+            page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+        finally:
+            decrement_active_tasks_count(session.id)
+
+        logger.info("Session from another task injected and validated.")
 
 def _create_single_account(page: Page, logger: logging.Logger):
     logger.debug("Opening create account dialog.")
@@ -373,7 +434,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
         break
 
 
-@with_browser
+@with_persistent_browser
 def action_create_account(page: Page, task_id):
     backend = get_backend(BACKEND_NAME)
     count = int(backend.accounts_creation_pd)
@@ -404,7 +465,7 @@ def action_create_account(page: Page, task_id):
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
-@with_browser
+@with_persistent_browser
 def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -431,7 +492,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
 
-@with_browser
+@with_persistent_browser
 def action_freeplay_account(page: Page, count: int, account_id: str, order_id, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -458,7 +519,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, order_id, t
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
 
-@with_browser
+@with_persistent_browser
 def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -484,8 +545,8 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
-@with_browser
-def action_read_account(page: Page, account_id: str, task_id):
+@with_persistent_browser
+def action_read_account(page: Page, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
