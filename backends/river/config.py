@@ -7,7 +7,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "RV"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://river-pay.com/office/login"
+LOGIN_URL = "https://river-pay.com/office/index"
 USERNAME  = "TestRS159"
 PASSWORD  = "TestRS1122"
 CAPTCHA = False

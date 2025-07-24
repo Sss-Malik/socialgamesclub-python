@@ -10,8 +10,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "OS"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://orionstars.vip:8781/default.aspx"
-MAIN_URL = "https://orionstars.vip:8781/Cashier.aspx"
+LOGIN_URL = "https://orionstars.vip:8781/Cashier.aspx"
 USERNAME  = "TestOS159"
 PASSWORD  = "Test@159872!!"
 

@@ -316,7 +316,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
 
 
 @with_persistent_browser
-def action_create_account(page: Page, task_id):
+def action_create_account(page: Page, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     count = int(backend.accounts_creation_pd)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -347,7 +347,7 @@ def action_create_account(page: Page, task_id):
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
 @with_persistent_browser
-def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id):
+def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -374,7 +374,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 @with_persistent_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -401,7 +401,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id):
 
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)

@@ -7,7 +7,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "UP"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://ht.ultrapanda.mobi/#/login"
+LOGIN_URL = "https://ht.ultrapanda.mobi/#/index"
 USERNAME  = "TestUP159"
 PASSWORD  = "Test1234"
 USER_MANAGEMENT_URL = "https://ht.ultrapanda.mobi/#/manage-user/account"

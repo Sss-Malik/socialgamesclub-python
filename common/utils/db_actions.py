@@ -1,6 +1,8 @@
 # casino_automation/crud.py
+from requests import Session
+
 from db import SessionLocal
-from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult
+from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession
 from sqlalchemy.orm import joinedload
 
 def get_backend(name):
@@ -100,7 +102,8 @@ def insert_automation_result(
     description=None,
     task_id=None,
     status="pending",
-    data=None
+    data=None,
+    backend_id=None,
 ):
     db = SessionLocal()
     try:
@@ -109,7 +112,8 @@ def insert_automation_result(
             description=description,
             task_id=task_id,
             status=status,
-            data=data
+            data=data,
+            backend_id=backend_id
         )
         db.add(result)
         db.commit()
@@ -158,5 +162,75 @@ def mark_freeplay_transferred(account_id: str) -> bool:
         db.rollback()
         print(f"Error updating freeplay_transferred: {e}")
         return False
+    finally:
+        db.close()
+
+
+def get_session(session_id: int, db=None):
+    external = db is not None
+    db = db or SessionLocal()
+    try:
+        session = db.query(BackendSession).filter_by(id=session_id).first()
+        return session
+    finally:
+        if not external:
+            db.close()
+
+def get_latest_valid_session(backend):
+    db = SessionLocal()
+    try:
+        return db.query(BackendSession) \
+            .filter_by(backend=backend, is_valid=True) \
+            .order_by(BackendSession.id.desc()) \
+            .first()
+    finally:
+        db.close()
+
+def create_backend_session(backend, token=None, expires=None, is_valid=True, active_tasks_count=0):
+    db = SessionLocal()
+    try:
+        session = BackendSession(
+            backend=backend,
+            token=token,
+            expires=expires,
+            is_valid=is_valid,
+            active_tasks_count=active_tasks_count
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        return session
+    finally:
+        db.close()
+
+
+def invalidate_latest_session(backend):
+    db = SessionLocal()
+    try:
+        deleted_count = db.query(BackendSession).filter_by(backend=backend).delete()
+        db.commit()
+        return deleted_count  # Optional: return how many were deleted
+    finally:
+        db.close()
+
+
+def increment_active_tasks_count(session_id: int):
+    db = SessionLocal()
+    try:
+        session = db.query(BackendSession).filter_by(id=session_id).first()
+        if session:
+            session.active_tasks_count = (session.active_tasks_count or 0) + 1
+            db.commit()
+    finally:
+        db.close()
+
+
+def decrement_active_tasks_count(session_id: int):
+    db = SessionLocal()
+    try:
+        session = db.query(BackendSession).filter_by(id=session_id).first()
+        if session and session.active_tasks_count and session.active_tasks_count > 0:
+            session.active_tasks_count -= 1
+            db.commit()
     finally:
         db.close()

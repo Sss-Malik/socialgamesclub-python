@@ -1,7 +1,7 @@
 # api/main.py
 
 import importlib
-from fastapi import FastAPI, HTTPException, status, Header
+from fastapi import FastAPI, HTTPException, status, Header, Request
 from .schemas import (
     CreateAccountRequest,
     RechargeAccountRequest,
@@ -11,13 +11,21 @@ from .schemas import (
 )
 from settings import APP_KEY
 from .tasks import invoke_action
-from common.utils.db_actions import get_order, insert_automation_result, get_backend_account
+from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend
+import asyncio
 
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
     description="Run casino automation tasks via HTTP API."
 )
+
+# @app.middleware("http")
+# async def delay_request(request: Request, call_next):
+#     await asyncio.sleep(3)
+#     response = await call_next(request)
+#     return response
+
 
 def _check_app_key(x_app_key: str):
     if x_app_key != APP_KEY:
@@ -37,10 +45,12 @@ async def create_account(
         args=[req.backend, "create-account"],
         queue=req.backend
     )
+    backend = get_backend(req.backend)
     insert_automation_result(
         task_id=task.id,
         description="Initiate account creation",
-        user_id=None
+        user_id=None,
+        backend_id=backend.id,
     )
     return {
         "status": "scheduled",
@@ -74,10 +84,12 @@ async def recharge_account(
         },
         queue=req.backend
     )
+    backend = get_backend(req.backend)
     insert_automation_result(
         task_id=task.id,
         description="Initiate account recharge",
-        user_id=order.user.id
+        user_id=order.user.id,
+        backend_id=backend.id,
     )
     return {
         "status": "scheduled",
@@ -98,10 +110,12 @@ async def withdraw_account(
         kwargs={"account_id": req.account_id, "count": req.count},
         queue=req.backend
     )
+    backend = get_backend(req.backend)
     insert_automation_result(
         task_id=task.id,
         description="Initiate account withdrawal",
-        user_id=None
+        user_id=None,
+        backend_id=backend.id,
     )
     return {
         "status": "scheduled",
@@ -122,10 +136,12 @@ async def read_account(
         kwargs={"account_id": req.account_id},
         queue=req.backend
     )
+    backend = get_backend(req.backend)
     insert_automation_result(
         task_id=task.id,
         description="Initiate account read",
-        user_id=None
+        user_id=None,
+        backend_id=backend.id,
     )
     return {
         "status": "scheduled",
@@ -156,10 +172,12 @@ async def recharge_freeplay(
         kwargs={"account_id": req.account_id, "count": count},
         queue=req.backend
     )
+    backend = get_backend(req.backend)
     insert_automation_result(
         task_id=task.id,
         description="Initiate freeplay transfer",
-        user_id=user.id
+        user_id=user.id,
+        backend_id=backend.id,
     )
     return {
         "status": "scheduled",

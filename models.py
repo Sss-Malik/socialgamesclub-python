@@ -20,6 +20,7 @@ class BackendGame(Base):
     deleted_at = Column(DateTime)
 
     accounts = relationship("BackendAccount", back_populates="backend")
+    automation_results = relationship("AutomationResult", back_populates="backend")
 
 
 class BackendAccount(Base):
@@ -124,6 +125,7 @@ class AutomationResult(Base):
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     description = Column(String(255), nullable=True)
     task_id = Column(String(36), nullable=True)
+    backend_id = Column(Integer, ForeignKey("backend_games.id"), nullable=True)
     status = Column(String(255), nullable=True, default="pending")
     data = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
@@ -131,3 +133,14 @@ class AutomationResult(Base):
 
     # Optional: relationship to User
     user = relationship("User", back_populates="automation_results")
+    backend = relationship("BackendGame", back_populates="automation_results")
+
+class BackendSession(Base):
+    __tablename__ = 'backend_sessions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    backend = Column(String(255), nullable=True)
+    token = Column(Text, nullable=True)
+    expires = Column(String(255), nullable=True)
+    is_valid = Column(Boolean, nullable=False, default=True)
+    active_tasks_count = Column(Integer, nullable=True)

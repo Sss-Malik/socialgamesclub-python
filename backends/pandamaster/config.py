@@ -8,7 +8,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "PM"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://pandamaster.vip/default.aspx"
+LOGIN_URL = "https://pandamaster.vip/Cashier.aspx"
 USERNAME  = "TestPM159"
 PASSWORD  = "Test_159872"
 

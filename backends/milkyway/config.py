@@ -8,8 +8,7 @@ DEBUG = True
 BACKEND_SIGNATURE = "MW"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://milkywayapp.xyz:8781/default.aspx"
-MAIN_URL = "https://milkywayapp.xyz:8781/Cashier.aspx"
+LOGIN_URL = "https://milkywayapp.xyz:8781/Cashier.aspx"
 USERNAME  = "TestMW159"
 PASSWORD  = "Test_159872"
 MAX_CAPTCHA_RETRIES = 5

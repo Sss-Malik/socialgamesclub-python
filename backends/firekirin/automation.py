@@ -28,7 +28,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
-    page.goto(MAIN_URL, wait_until="domcontentloaded")
+    page.goto(login_url, wait_until="domcontentloaded")
 
 
     try:
