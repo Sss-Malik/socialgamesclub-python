@@ -32,14 +32,12 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         inject_session_token(page, session.token)
 
         if validate_session_token(page, logger):
-            increment_active_tasks_count(session.id)
-            try:
-                logger.info("Session injection and validation successful")
-                page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-                return
-            finally:
-                decrement_active_tasks_count(session.id)
+
+            logger.info("Session injection and validation successful")
+            page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            return session
+
         else:
             logger.warning("Session injection failed. Invalidating session.")
             if wait_for_active_tasks_to_zero(session.id, logger=logger):
@@ -90,13 +88,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
 
-            increment_active_tasks_count(new_session.id)
-            try:
-                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-                logger.info("Login and navigation successful.")
-            finally:
-                decrement_active_tasks_count(new_session.id)
 
+            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            logger.info("Login and navigation successful.")
+
+            return new_session
         finally:
             release_login_lock(backend.name)
     else:
@@ -112,15 +108,13 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             update_automation_result(task_id=task_id, status="failed", description="Session after wait was invalid")
             raise Exception("Session after wait was invalid")
 
-        increment_active_tasks_count(session.id)
-        try:
-            logger.info("Session from another task injected and validated.")
-            page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-        finally:
-            decrement_active_tasks_count(session.id)
 
         logger.info("Session from another task injected and validated.")
+        page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+        page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+        logger.info("Session from another task injected and validated.")
+        return session
 
 def _create_single_account(page: Page, logger: logging.Logger):
     logger.debug("Opening create account dialog.")
@@ -444,13 +438,17 @@ def action_create_account(page: Page, task_id):
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Create-account action started for %d accounts.", count)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url),
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         for i in range(count):
             logger.info("Creating account %d of %d", i + 1, count)
             _create_single_account(page, logger)
@@ -465,6 +463,8 @@ def action_create_account(page: Page, task_id):
         )
         update_automation_result(task_id=task_id, description=f"Account creation failed. {e}", status="failed")
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
 
@@ -475,13 +475,17 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url),
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         _recharge_account(page, logger, count, account_id, order_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
@@ -492,6 +496,8 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
@@ -503,13 +509,17 @@ def action_freeplay_account(page: Page, count: int, account_id: str, order_id, t
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url),
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         _freeplay_account(page, logger, count, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
@@ -520,6 +530,8 @@ def action_freeplay_account(page: Page, count: int, account_id: str, order_id, t
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
 
@@ -531,13 +543,17 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Withdraw-account action started: account_id=%s, count=%d", account_id, count)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url),
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         _withdraw_account(page, logger, count, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
@@ -548,6 +564,8 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id):
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}")
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
 
@@ -558,12 +576,16 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Read-account action started: account_id=%s", account_id)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url)
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account read: %s", e, exc_info=True)
@@ -574,5 +596,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
         update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed")
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url))
