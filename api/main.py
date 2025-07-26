@@ -20,11 +20,11 @@ app = FastAPI(
     description="Run casino automation tasks via HTTP API."
 )
 
-# @app.middleware("http")
-# async def delay_request(request: Request, call_next):
-#     await asyncio.sleep(3)
-#     response = await call_next(request)
-#     return response
+@app.middleware("http")
+async def delay_request(request: Request, call_next):
+    await asyncio.sleep(2)
+    response = await call_next(request)
+    return response
 
 
 def _check_app_key(x_app_key: str):
@@ -63,9 +63,7 @@ async def create_account(
 async def recharge_account(
     req: RechargeAccountRequest,
     x_order_id: str = Header(None),
-    x_app_key: str = Header(None)
 ):
-    _check_app_key(x_app_key)
 
     order = get_order(x_order_id)
     if not order:
@@ -101,9 +99,7 @@ async def recharge_account(
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
     req: WithdrawAccountRequest,
-    x_app_key: str = Header(None)
 ):
-    _check_app_key(x_app_key)
 
     task = invoke_action.apply_async(
         args=[req.backend, "withdraw-account"],
@@ -127,9 +123,7 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
-    x_app_key: str = Header(None)
 ):
-    _check_app_key(x_app_key)
 
     task = invoke_action.apply_async(
         args=[req.backend, "read-account"],
@@ -153,7 +147,6 @@ async def read_account(
 @app.post("/automation/freeplay")
 async def recharge_freeplay(
     req: RechargeFreeplayRequest,
-    x_app_key: str = Header(None)
 ):
 
     backend_account = get_backend_account(req.account_id)
