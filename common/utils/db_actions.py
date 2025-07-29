@@ -1,9 +1,7 @@
-# casino_automation/crud.py
-from requests import Session
-
 from db import SessionLocal
-from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession
+from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, WheelSpin
 from sqlalchemy.orm import joinedload
+from sqlalchemy import desc
 
 def get_backend(name):
     db = SessionLocal()
@@ -234,3 +232,63 @@ def decrement_active_tasks_count(session_id: int):
             db.commit()
     finally:
         db.close()
+
+def get_referral_bonus(user_id):
+    db = SessionLocal()
+    try:
+        return db.query(ReferralBonus)\
+            .options(joinedload(ReferralBonus.user))\
+            .filter(ReferralBonus.referrer_user_id == user_id)\
+            .order_by(desc(ReferralBonus.created_at))\
+            .first()
+    finally:
+        db.close()
+
+def mark_referral_bonus_status(referral_bonus_id, status):
+    db = SessionLocal()
+    try:
+        referral_bonus = db.query(ReferralBonus).filter(ReferralBonus.id == referral_bonus_id).first()
+        if not referral_bonus:
+            return False
+
+        referral_bonus.status = status
+        db.commit()
+        return True
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error marking referral bonus status: {e}")
+        return False
+    finally:
+        db.close()
+
+
+def get_spin(user_id):
+    db = SessionLocal()
+    try:
+        return db.query(WheelSpin).options(joinedload(WheelSpin.user)).filter(WheelSpin.user_id == user_id).order_by(desc(WheelSpin.created_at)).first()
+    finally:
+        db.close()
+
+def mark_spin_status(spin_id, status):
+    db = SessionLocal()
+    try:
+        spin = db.query(WheelSpin).filter(WheelSpin.id == spin_id).first()
+        if not spin:
+            return False
+        spin.status = status
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error marking spin status: {e}")
+        return False
+    finally:
+        db.close()
+
+
+def finalize_status(t, status, id_to_update=None):
+    if t == "referral_freeplay":
+        mark_referral_bonus_status(id_to_update, status)
+    elif t == "reward_freeplay":
+        mark_spin_status(id_to_update, status)

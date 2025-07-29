@@ -4,7 +4,7 @@ def click_recharge_for_account(main_frame, account_id: str, logger):
     logger.debug(f"Searching for recharge button for Username: {account_id}")
 
     # wait for the table container to be visible
-    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=5_000)
+    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=50_000)
 
     # locate the <tr> whose 4th <td> contains our account_id
     row = main_frame.locator(
@@ -32,7 +32,7 @@ def click_withdraw_for_account(main_frame, account_id: str, logger):
     logger.debug(f"Searching for withdraw button for Username: {account_id}")
 
     # wait for the table container to be visible
-    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=5_000)
+    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=50_000)
 
     # locate the <tr> whose 4th <td> contains our account_id
     row = main_frame.locator(

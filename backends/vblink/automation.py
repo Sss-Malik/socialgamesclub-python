@@ -12,7 +12,7 @@ from common.utils.poll_utils import wait_for_valid_session, wait_for_active_task
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_order_automation_status, \
     update_automation_result, mark_freeplay_transferred, increment_active_tasks_count, decrement_active_tasks_count, \
-    invalidate_latest_session, create_backend_session
+    invalidate_latest_session, create_backend_session, finalize_status
 from common.utils.browser import with_persistent_browser
 from backends.ultrapanda.utils.session import inject_session_token, validate_session_token
 from common.utils.redis_utils import acquire_login_lock, release_login_lock
@@ -239,7 +239,7 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         break
 
 
-def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_id: str, task_id):
+def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_id: str, task_id, t, id_to_update):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={points}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
@@ -296,19 +296,25 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
             if "not authorized to check remaining balance" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
+                finalize_status(t, "failed", id_to_update)
                 raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
             elif "sucessful operation" in text:
                 logger.info("Recharge successful.")
                 insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
                 update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-                mark_freeplay_transferred(account_id)
+                if t == "signup_freeplay":
+                    mark_freeplay_transferred(account_id)
+                else:
+                    finalize_status(t, "success", id_to_update)
             else:
                 logger.warning(f"Unexpected recharge response: {text}")
                 update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+                finalize_status(t, "failed", id_to_update)
                 insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url))
         except PlaywrightTimeoutError:
             logger.exception("No dialog appeared after setting score.")
             update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
+            finalize_status(t, "failed", id_to_update)
             insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
         break
 
@@ -503,7 +509,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 @with_persistent_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, order_id, task_id):
+def action_freeplay_account(page: Page, count: int, account_id: str, order_id, task_id, t, id_to_update):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -520,7 +526,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, order_id, t
         session = _login_and_navigate(page, logger, backend, task_id)
         if session:
             increment_active_tasks_count(session.id)
-        _freeplay_account(page, logger, count, account_id, task_id)
+        _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
