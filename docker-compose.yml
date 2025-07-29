@@ -27,7 +27,6 @@ services:
       celery -A celery_app.celery_app worker
         --loglevel=debug
         --concurrency=600
-        --pool=gevent
         -Q juwa,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway
         --hostname=worker.main@%h
     volumes:
