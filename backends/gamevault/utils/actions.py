@@ -16,7 +16,7 @@ def click_recharge_for_account(page: Page, account_id: str, logger):
     ).first
 
     try:
-        row.wait_for(timeout=5_000)
+        row.wait_for(timeout=50000)
     except PlaywrightTimeoutError:
         logger.exception(f"⚠️ No row matched Username: {account_id}")
         raise Exception(f"<UNK> No row matched Username: {account_id}")
@@ -57,7 +57,7 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
     ).first
 
     try:
-        row.wait_for(timeout=5_000)
+        row.wait_for(timeout=50000)
     except PlaywrightTimeoutError:
         logger.exception(f"⚠️ No row matched Username: {account_id}")
         raise Exception(f"<UNK> No row matched Username: {account_id}")

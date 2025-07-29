@@ -1,5 +1,5 @@
 # casino_automation/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP
 from sqlalchemy.orm import relationship
 from db import Base
 from datetime import datetime
@@ -89,6 +89,8 @@ class User(Base):
     backend_accounts = relationship("BackendAccount", back_populates="user")
     deposits = relationship("Deposit", back_populates="user")
     automation_results = relationship("AutomationResult", back_populates="user")
+    referral_bonuses = relationship("ReferralBonus", back_populates="user")
+    spins = relationship("WheelSpin", back_populates="user")
 
 class Deposit(Base):
     __tablename__ = "deposits"
@@ -144,3 +146,38 @@ class BackendSession(Base):
     expires = Column(String(255), nullable=True)
     is_valid = Column(Boolean, nullable=False, default=True)
     active_tasks_count = Column(Integer, nullable=True)
+
+
+
+class ReferralBonus(Base):
+    __tablename__ = 'referral_bonuses'  # Update this to your actual table name
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    referrer_user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    referred_user_id = Column(BigInteger, nullable=False)
+    payment_id = Column(BigInteger, nullable=True)
+    bonus_percentage = Column(DECIMAL(5, 2), nullable=False)
+    amount_loaded = Column(DECIMAL(10, 6), nullable=False)
+    bonus_amount = Column(DECIMAL(10, 6), nullable=False)
+    status = Column(String(255), nullable=False, default='pending')
+    claimed_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True, server_default=func.now())
+    updated_at = Column(TIMESTAMP, nullable=True, onupdate=func.now())
+
+    user = relationship("User", back_populates="referral_bonuses")
+
+
+class WheelSpin(Base):
+    __tablename__ = 'spins'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    spun_at = Column(TIMESTAMP, nullable=False)
+    type = Column(String(255), nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    reward = Column(DECIMAL(10, 6), nullable=True)
+    status = Column(String(255), nullable=False, default="pending")
+    created_at = Column(TIMESTAMP, nullable=True, server_default=func.now())
+    updated_at = Column(TIMESTAMP, nullable=True, onupdate=func.now())
+
+    user = relationship("User", back_populates="spins")

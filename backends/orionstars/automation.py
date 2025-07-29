@@ -15,7 +15,7 @@ from common.utils.save_credentials import save_credentials
 from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
-    update_order_automation_status, update_automation_result, mark_freeplay_transferred
+    update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -186,7 +186,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
 
 
-def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id):
+def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, t, id_to_update):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
     main_frame = page.frame_locator(MAIN_IFRAME)
     main_frame.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -214,22 +214,28 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-            mark_freeplay_transferred(account_id)
+            if t == "signup_freeplay":
+                mark_freeplay_transferred(account_id)
+            else:
+                finalize_status(t, "success", id_to_update)
         elif "insufficient" in result:
             logger.error("Recharge failed: backend balance insufficient.")
             update_automation_result(task_id=task_id, status="failed", description=f"Backend balance insufficient on {BACKEND_NAME}")
+            finalize_status(t, "failed", id_to_update)
             raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
         elif "unknown" in result:
             logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
+            finalize_status(t, "failed", id_to_update)
             insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url))
         else:
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+            finalize_status(t, "failed", id_to_update)
             logger.warning(f"Unexpected recharge response: {result}")
             insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url))
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
-
+        finalize_status(t, "failed", id_to_update)
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
@@ -379,7 +385,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 @with_persistent_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend):
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend, t, id_to_update):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -392,7 +398,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url),
         )
         _login_and_navigate(page, logger, backend, task_id)
-        _freeplay_account(page, logger, count, account_id, task_id)
+        _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(

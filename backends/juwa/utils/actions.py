@@ -5,7 +5,7 @@ def click_recharge_for_account(page: Page, account_id: str, logger):
 
     # 1. Wait for at least one table row to appear
     try:
-        page.locator("table.el-table__body tr").first.wait_for(timeout=10_000)
+        page.locator("table.el-table__body tr").first.wait_for(timeout=50000)
     except PlaywrightTimeoutError:
         raise Exception("No table rows found within timeout.")
 
@@ -46,7 +46,7 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
 
     # 1. Wait for at least one table row to appear
     try:
-        page.locator("table.el-table__body tr").first.wait_for(timeout=10_000)
+        page.locator("table.el-table__body tr").first.wait_for(timeout=50000)
     except PlaywrightTimeoutError:
         raise Exception("No table rows found within timeout.")
 

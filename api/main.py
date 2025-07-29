@@ -11,7 +11,7 @@ from .schemas import (
 )
 from settings import APP_KEY
 from .tasks import invoke_action
-from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend
+from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend, get_referral_bonus, get_spin
 import asyncio
 
 app = FastAPI(
@@ -148,21 +148,39 @@ async def read_account(
 async def recharge_freeplay(
     req: RechargeFreeplayRequest,
 ):
-
     backend_account = get_backend_account(req.account_id)
     if not backend_account or not backend_account.user:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
 
     user = backend_account.user
-    if user.freeplay_transferred:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Freeplay already transferred")
-    if user.freeplay_amount == 0:
-        return {"status": "skipped", "reason": "Freeplay amount is 0"}
+    t = req.type
+    count = None
+    id_to_update = None
 
-    count = user.freeplay_amount or 1
+    if t == "referral_freeplay":
+        referral_bonus = get_referral_bonus(user.id)
+        if referral_bonus.status != "pending":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Referral freeplay already claimed")
+        count = referral_bonus.bonus_amount
+        id_to_update = referral_bonus.id
+    elif t == "reward_freeplay":
+        spin = get_spin(user.id)
+        if spin.status != "pending":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Spin already claimed")
+        if spin.type != "freeplay":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Type mismatch for request")
+        count = spin.reward
+        id_to_update = spin.id
+    elif t == "signup_freeplay":
+        if user.freeplay_transferred:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Freeplay already transferred")
+        if user.freeplay_amount is None or user.freeplay_amount == 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "This user is not eligible for signup freeplay")
+        count = user.freeplay_amount
+
     task = invoke_action.apply_async(
         args=[req.backend, "freeplay-account"],
-        kwargs={"account_id": req.account_id, "count": count},
+        kwargs={"account_id": req.account_id, "count": int(count), "t": t, "id_to_update": id_to_update},
         queue=req.backend
     )
     backend = get_backend(req.backend)

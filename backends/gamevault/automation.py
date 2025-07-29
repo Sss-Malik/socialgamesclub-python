@@ -12,7 +12,8 @@ from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
 from backends.gamevault.utils.actions import click_recharge_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
-from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status, update_automation_result, mark_freeplay_transferred
+from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
+    update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -32,7 +33,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     page.goto(login_url, wait_until="domcontentloaded")
 
     try:
-        if page.locator(MAIN_PAGE_EL).is_visible(timeout=5_000):
+        if page.locator(MAIN_PAGE_EL).is_visible(timeout=8000):
             logger.info("Existing session detected; skipping login.")
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return
@@ -84,7 +85,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             break
 
     logger.debug("Waiting for main page element after login.")
-    page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+    page.locator(MAIN_PAGE_EL).wait_for(timeout=60000)
 
     logger.info("Login successful, navigating to user management page.")
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
@@ -96,7 +97,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
     try:
         announcement_box = page.locator("div.el-message-box.security-announcement-box")
-        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.wait_for(timeout=5000, state="visible")
         announcement_box.locator("button:has-text('OK')").click()
     except PlaywrightTimeoutError:
         pass
@@ -164,7 +165,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
 
     try:
         announcement_box = page.locator("div.el-message-box.security-announcement-box")
-        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.wait_for(timeout=5000, state="visible")
         announcement_box.locator("button:has-text('OK')").click()
     except PlaywrightTimeoutError:
         pass
@@ -178,7 +179,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
         has=page.locator(f"td .cell:text('{account_id}')")
     ).first
 
-    row.wait_for(timeout=5000)
+    row.wait_for(timeout=20000)
     logger.debug("Account row located in table.")
     backend_account_id = row.locator("td:nth-child(2) .cell").inner_text().strip()
     data = {
@@ -200,7 +201,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
 
     try:
         announcement_box = page.locator("div.el-message-box.security-announcement-box")
-        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.wait_for(timeout=5000, state="visible")
         announcement_box.locator("button:has-text('OK')").click()
     except PlaywrightTimeoutError:
         pass
@@ -261,7 +262,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
 
 
 
-def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id):
+def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id, t, id_to_update):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={amount}")
 
     try:
@@ -299,9 +300,11 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
             if "not enougn balance" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
+                finalize_status(t, "failed", id_to_update)
                 raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
             if "form is being submitted" in text:
                 update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
+                finalize_status(t, "failed", id_to_update)
                 return
 
     # verify deposit
@@ -315,16 +318,20 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url))
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-            mark_freeplay_transferred(account_id)
+            if t == "signup_freeplay":
+                mark_freeplay_transferred(account_id)
+            else:
+                finalize_status(t, "success", id_to_update)
         else:
             logger.warning(f"Unexpected recharge response: {txt}")
             insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url))
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+            finalize_status(t, "failed", id_to_update)
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url))
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
-
+        finalize_status(t, "failed", id_to_update)
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id):
@@ -447,7 +454,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 @with_persistent_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend):
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend, t, id_to_update):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -460,7 +467,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url),
         )
         _login_and_navigate(page, logger, backend, task_id)
-        _freeplay_account(page, logger, count, account_id, task_id)
+        _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(

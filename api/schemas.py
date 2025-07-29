@@ -20,3 +20,4 @@ class ReadAccountRequest(BaseModel):
 class RechargeFreeplayRequest(BaseModel):
     backend: str = Field(..., example="juwa")
     account_id: str = Field(..., example="abc123")
+    type: str = Field(..., example="signup_freeplay")
