@@ -4,10 +4,10 @@ import os
 
 from settings import HEADLESS
 
-MAX_CONTEXTS = int(os.getenv("MAX_CONTEXTS", 10))
+MAX_CONTEXTS = int(os.getenv("MAX_CONTEXTS", 100))
 _CONTEXT_SEM = Semaphore(MAX_CONTEXTS)
 
-MAX_PAGES = int(os.getenv("MAX_PAGES", 100))
+MAX_PAGES = int(os.getenv("MAX_PAGES", 1000))
 PAGE_SEM = Semaphore(MAX_PAGES)
 
 # Start Playwright once per worker

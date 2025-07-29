@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/app
     depends_on:
       - redis
 
@@ -21,7 +23,13 @@ services:
   worker:
     build: .
     container_name: casino_worker
-    command: celery -A celery_app.celery_app worker --loglevel=info --concurrency=8
+    command: >
+      celery -A celery_app.celery_app worker
+        --loglevel=debug
+        --concurrency=600
+        --pool=gevent
+        -Q juwa,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway
+        --hostname=worker.main@%h
     volumes:
       - .:/app
     env_file:

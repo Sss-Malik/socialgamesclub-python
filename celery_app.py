@@ -38,6 +38,9 @@ celery_app.conf.update(
         "backends.river.automation.action_*": {"queue": "river"},
         "backends.firekirin.automation.action_*": {"queue": "firekirin"},
     },
+    worker_max_tasks_per_child=1000,
+    broker_pool_limit=None,
+    broker_transport_options={ 'max_connections': 1000 }
 )
 
 celery_app.autodiscover_tasks(["api.tasks"])
