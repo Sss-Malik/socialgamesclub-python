@@ -133,6 +133,8 @@ class AutomationResult(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    order_id = Column(String(50), nullable=True, default=None)
+
     # Optional: relationship to User
     user = relationship("User", back_populates="automation_results")
     backend = relationship("BackendGame", back_populates="automation_results")

@@ -102,6 +102,7 @@ def insert_automation_result(
     status="pending",
     data=None,
     backend_id=None,
+    order_id=None
 ):
     db = SessionLocal()
     try:
@@ -111,7 +112,8 @@ def insert_automation_result(
             task_id=task_id,
             status=status,
             data=data,
-            backend_id=backend_id
+            backend_id=backend_id,
+            order_id=order_id
         )
         db.add(result)
         db.commit()
@@ -120,6 +122,19 @@ def insert_automation_result(
     finally:
         db.close()
 
+
+def get_automation_result(order_id):
+    db = SessionLocal()
+    try:
+        result = (
+            db.query(AutomationResult)
+            .filter(AutomationResult.order_id == order_id)
+            .order_by(AutomationResult.created_at.desc())
+            .first()
+        )
+        return result
+    finally:
+        db.close()
 
 def update_automation_result(task_id, **fields):
     db = SessionLocal()
