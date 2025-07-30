@@ -11,7 +11,8 @@ from .schemas import (
 )
 from settings import APP_KEY
 from .tasks import invoke_action
-from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend, get_referral_bonus, get_spin
+from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend, \
+    get_referral_bonus, get_spin, get_automation_result
 import asyncio
 
 app = FastAPI(
@@ -73,6 +74,11 @@ async def recharge_account(
     if order.automation_status == "finished":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already processed")
 
+    automation_result = get_automation_result(x_order_id)
+
+    if automation_result and automation_result.status == "pending":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Task for this order id is already running")
+
     task = invoke_action.apply_async(
         args=[req.backend, "recharge-account"],
         kwargs={
@@ -88,6 +94,7 @@ async def recharge_account(
         description="Initiate account recharge",
         user_id=order.user.id,
         backend_id=backend.id,
+        order_id=x_order_id
     )
     return {
         "status": "scheduled",
