@@ -32,13 +32,22 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     page.goto(login_url, wait_until="domcontentloaded")
 
-    try:
-        if page.locator(MAIN_PAGE_EL).is_visible(timeout=8000):
-            logger.info("Existing session detected; skipping login.")
+    if page.locator(MAIN_PAGE_EL).is_visible(timeout=8000):
+        logger.info("Existing session detected; checking for timeout box...")
+
+        timeout_box = page.locator("div.el-message-box[aria-label='Login timeout']")
+        if timeout_box.is_visible(timeout=3000):
+            logger.info("Session has expired. Proceeding with login...")
+
+            confirm_button = timeout_box.locator("button.el-button:has(span:text('confirm'))")
+            confirm_button.click(force=True)
+            page.wait_for_load_state("domcontentloaded")
+        else:
+            logger.info("Valid session confirmed. Skipping login...")
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return
-    except PlaywrightTimeoutError:
-        logger.info("No existing session; proceeding with login.")
+    else:
+        logger.info("MAIN_PAGE_EL not visible. No existing session. Proceeding with login...")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
