@@ -335,7 +335,7 @@ def action_create_account(page: Page, task_id, backend):
             f"Initiating account creation for backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url),
         )
-        _login_and_navigate(page, logger, backend)
+        _login_and_navigate(page, logger, backend, task_id)
         for i in range(count):
             logger.info("Creating account %d of %d", i + 1, count)
             _create_single_account(page, logger)
