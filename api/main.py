@@ -123,7 +123,9 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
+    x_app_key: str = Header(None),
 ):
+    _check_app_key(x_app_key)
 
     task = invoke_action.apply_async(
         args=[req.backend, "read-account"],
