@@ -247,6 +247,9 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
             if "form is being submitted" in text:
                 update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
                 return
+            if "players can only deposit again after selecting whether or not to participate in the wager bonus program for the previous deposit !" in text:
+                update_automation_result(task_id=task_id, status="failed", description="Wager Bonus error! User needs to resolve this")
+                raise Exception(f"Wager Bonus error! User needs to resolve this")
 
     # verify deposit
     try:
