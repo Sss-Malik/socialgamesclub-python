@@ -32,22 +32,22 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     page.goto(login_url, wait_until="domcontentloaded")
 
-    if page.locator(MAIN_PAGE_EL).is_visible(timeout=8000):
-        logger.info("Existing session detected; checking for timeout box...")
-
-        timeout_box = page.locator("div.el-message-box[aria-label='Login timeout']")
-        if timeout_box.is_visible(timeout=3000):
-            logger.info("Session has expired. Proceeding with login...")
-
-            confirm_button = timeout_box.locator("button.el-button:has(span:text('confirm'))")
-            confirm_button.click(force=True)
-            page.wait_for_load_state("domcontentloaded")
+    try:
+        page.wait_for_selector(".el-message__content", timeout=2000)
+        msgs = page.locator(".el-message__content").all_text_contents()
+        if any(kw in msg.lower() for msg in msgs for kw in ("please login", "timeout", "expired")):
+            logger.info("Detected expired session message; forcing login form.")
+            page.goto(LOGIN_PAGE_URL, wait_until="domcontentloaded")
         else:
-            logger.info("Valid session confirmed. Skipping login...")
+            if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
+                logger.info("Session still valid; skipping login.")
+                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+                return
+    except PlaywrightTimeoutError:
+        if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
+            logger.info("No login form visible; assuming valid session.")
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return
-    else:
-        logger.info("MAIN_PAGE_EL not visible. No existing session. Proceeding with login...")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
