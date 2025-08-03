@@ -25,9 +25,10 @@ services:
     container_name: casino_worker
     command: >
       celery -A celery_app.celery_app worker
+        --beat
         --loglevel=debug
         --concurrency=600
-        -Q juwa,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway
+        -Q default,juwa,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway
         --hostname=worker.main@%h
     volumes:
       - .:/app
