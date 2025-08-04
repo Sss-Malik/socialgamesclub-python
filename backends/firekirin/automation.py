@@ -12,6 +12,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status
 from common.utils.browser import with_persistent_browser
+from common.utils.aws_s3 import capture_and_upload_screenshot
 from settings import APP_ENV, HEADLESS, DEBUG
 
 
@@ -321,13 +322,19 @@ def action_create_account(page: Page, task_id, backend):
             page.reload(wait_until="domcontentloaded")
         update_automation_result(task_id=task_id, status="finished", description="Account creation successful.")
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account creation: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account creation: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description="Error during account creation.", status="failed")
+        update_automation_result(task_id=task_id, description="Error during account creation.", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url))
@@ -348,13 +355,20 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         _login_and_navigate(page, logger, backend, task_id)
         _recharge_account(page, logger, count, account_id, order_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Error during account recharge.{e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Error during account recharge.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
@@ -377,13 +391,20 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         _login_and_navigate(page, logger, backend, task_id)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Error during account recharge.{e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Error during account recharge.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url))
@@ -404,13 +425,20 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         _login_and_navigate(page, logger, backend, task_id)
         _withdraw_account(page, logger, count, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account withdrawal: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Error during account withdrawal.{e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Error during account withdrawal.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url))
@@ -430,13 +458,20 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         _login_and_navigate(page, logger, backend, task_id)
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account read: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account read: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Error during account read.{e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Error during account read.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url))

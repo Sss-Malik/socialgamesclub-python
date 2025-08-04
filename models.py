@@ -129,6 +129,7 @@ class AutomationResult(Base):
     task_id = Column(String(36), nullable=True)
     backend_id = Column(Integer, ForeignKey("backend_games.id"), nullable=True)
     status = Column(String(255), nullable=True, default="pending")
+    screenshot_url = Column(String(255), nullable=True, default=None)
     data = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

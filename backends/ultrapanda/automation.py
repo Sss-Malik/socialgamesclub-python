@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 from backends.ultrapanda.config import *
 from backends.ultrapanda.utils.credentials import generate_credentials
 from backends.ultrapanda.utils.actions import click_set_score
+from common.utils.aws_s3 import capture_and_upload_screenshot
 
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
@@ -458,13 +459,19 @@ def action_create_account(page: Page, task_id, backend):
             page.reload(wait_until="domcontentloaded")
         update_automation_result(task_id=task_id, status="success", description="Account creation successful.")
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account creation: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account creation: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Account creation failed. {e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Account creation failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
@@ -491,13 +498,20 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             increment_active_tasks_count(session.id)
         _recharge_account(page, logger, count, account_id, order_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+            account_id=account_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
+        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
@@ -524,13 +538,20 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             increment_active_tasks_count(session.id)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+            account_id=account_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account recharge: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}")
+        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
@@ -558,13 +579,20 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             increment_active_tasks_count(session.id)
         _withdraw_account(page, logger, count, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+            account_id=account_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account withdrawal: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}")
+        update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
@@ -591,13 +619,20 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
 
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+            account_id=account_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account read: %s", e, exc_info=True)
         insert_log(
             "error",
             f"Error during account read: {e}",
             source_url=str(page.url),
         )
-        update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed")
+        update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
