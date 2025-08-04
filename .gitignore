@@ -13,3 +13,4 @@ __pycache__/
 .env
 *.db
 celerybeat-schedule.db
+celerybeat-schedule
