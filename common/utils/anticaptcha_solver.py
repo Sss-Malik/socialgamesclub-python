@@ -1,7 +1,7 @@
 from pathlib import Path
 import time
 from anticaptchaofficial.imagecaptcha import *
-
+from settings import ANTICAPTCHA_API_KEY
 import logging
 
 def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeout: int = 10000):
@@ -16,7 +16,7 @@ def solve_captcha(captcha_img_el, save_dir: Path, logger: logging.Logger, timeou
         # Initialize solver
         solver = imagecaptcha()
 
-        solver.set_key("8f05b2c530919c55206b1292e565b7ef")
+        solver.set_key(ANTICAPTCHA_API_KEY)
 
         solver.set_numeric(1)
 
