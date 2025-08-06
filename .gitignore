@@ -9,3 +9,8 @@ created_players.txt
 
 __pycache__/
 *.pyc
+
+.env
+*.db
+celerybeat-schedule.db
+celerybeat-schedule

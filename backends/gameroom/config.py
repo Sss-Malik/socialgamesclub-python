@@ -2,16 +2,15 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "gameroom"
-DEBUG = False
+BACKEND_ID = 2
+DEBUG = True
 BACKEND_SIGNATURE = "GR"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://agentserver1.gameroom777.com/admin/login"
+LOGIN_URL = "https://agentserver1.gameroom777.com/admin"
 USERNAME  = "TestGR159"
 PASSWORD  = "TestGR1122@"
-CAPTCHA = True
-URL_CHANGE = False
-USER_MANAGEMENT_URL = None
+MAX_CAPTCHA_RETRIES = 5
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent
@@ -38,6 +37,7 @@ ACCOUNT_BALANCE = 'input[name="money"]'
 ACCOUNT_PASSWORD = 'input#password[name="password"]'
 CONFIRM_PASSWORD = 'input[name="password_confirmation"]'
 CREATE_ACCOUNT = 'button:has-text("Submit")'
-ACCOUNT_SUCCESS = 'div.layui-layer-content >> text=ACCOUNT:'
-ACCOUNT_SUCCESS_MSG = ["account:"]
+ACCOUNT_SUCCESS = "div.layui-layer.layui-layer-dialog"
 ACCOUNT_SUCCESS_CLOSE = 'a:has-text("Close")'
+ACCOUNT_SEARCH_INPUT = 'input[name="account"]'
+ACCOUNT_RECHARGE_SUCCESS = "div.layui-layer.layui-layer-dialog"

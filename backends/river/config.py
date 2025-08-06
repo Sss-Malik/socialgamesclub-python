@@ -2,15 +2,15 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "river"
-DEBUG = False
+BACKEND_ID = 8
+DEBUG = True
 BACKEND_SIGNATURE = "RV"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://river-pay.com/office/login"
+LOGIN_URL = "https://river-pay.com/office/index"
 USERNAME  = "TestRS159"
 PASSWORD  = "TestRS1122"
 CAPTCHA = False
-URL_CHANGE = True
 USER_MANAGEMENT_URL = "https://river-pay.com/cashier/create"
 
 # — Paths for this backend (relative to the project root) —
@@ -35,4 +35,4 @@ ACCOUNT_BALANCE = 'input#Accounts_balance'
 ACCOUNT_PASSWORD = 'input[placeholder="Length must be 6-16 characters! Must include a combination of numbers and letters, and allows some special characters: !@#$%^/.,()"]'
 CREATE_ACCOUNT = 'input[type="submit"][value="Create account"]'
 ACCOUNT_SUCCESS = '.alert.alert-success'
-ACCOUNT_SUCCESS_MSG = ["successfully created", "account", "amount",]
+ACCOUNT_SEARCH_INPUT = 'input[name="search"]'

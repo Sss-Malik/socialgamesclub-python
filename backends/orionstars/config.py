@@ -5,16 +5,21 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "orionstars"
+BACKEND_ID = 6
 DEBUG = True
 BACKEND_SIGNATURE = "OS"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://orionstars.vip:8781/default.aspx"
+LOGIN_URL = "https://orionstars.vip:8781/Cashier.aspx"
 USERNAME  = "TestOS159"
 PASSWORD  = "Test@159872!!"
-CAPTCHA = False
+
+CAPTCHA = True
 URL_CHANGE = False
 USER_MANAGEMENT_URL = None
+
+MAX_CAPTCHA_RETRIES = 5
+
 
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent
@@ -42,4 +47,5 @@ ACCOUNT_PASSWORD = "#txtLogonPass"
 CONFIRM_PASSWORD = "#txtLogonPass2"
 CREATE_ACCOUNT = "xpath=//a[contains(@class,'btn13') and contains(text(),'Create Player')]"
 ACCOUNT_SUCCESS = '.el-message.el-message--success'
-ACCOUNT_SUCCESS_MSG = ["added successfully", "success", "created"]
+ACCOUNT_SEARCH_INPUT = 'input[name="txtSearch"]'
+ACCOUNT_SEARCH_BUTTON = "a:has-text('Search')"

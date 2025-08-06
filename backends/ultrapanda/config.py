@@ -1,16 +1,15 @@
 from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
-BACKEND_NAME = "pandamaster"
-DEBUG = False
-BACKEND_SIGNATURE = "PM"
+BACKEND_NAME = "ultrapanda"
+BACKEND_ID = 9
+DEBUG = True
+BACKEND_SIGNATURE = "UP"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://ht.ultrapanda.mobi/#/login"
+LOGIN_URL = "https://ht.ultrapanda.mobi/#/index"
 USERNAME  = "TestUP159"
 PASSWORD  = "Test1234"
-CAPTCHA = False
-URL_CHANGE = True
 USER_MANAGEMENT_URL = "https://ht.ultrapanda.mobi/#/manage-user/account"
 
 # — Paths for this backend (relative to the project root) —
@@ -34,3 +33,5 @@ ACCOUNT_PASSWORD = 'input[placeholder="Length must be 6-16 characters! Must incl
 CREATE_ACCOUNT = 'button:has-text("OK")'
 ACCOUNT_SUCCESS = '.el-message.el-message--success'
 ACCOUNT_SUCCESS_MSG = ["sucessful"]
+SEARCH_URL = "https://ht.ultrapanda.mobi/#/manage-user/search"
+ACCOUNT_SEARCH_INPUT = 'input[type="text"][placeholder="Please enter the account to be search here"]'
