@@ -1,5 +1,5 @@
 # casino_automation/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP, Float
 from sqlalchemy.orm import relationship
 from db import Base
 from datetime import datetime
@@ -137,6 +137,7 @@ class AutomationResult(Base):
     data = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    duration_seconds = Column(Float, nullable=True)
 
     order_id = Column(String(50), nullable=True, default=None)
 
