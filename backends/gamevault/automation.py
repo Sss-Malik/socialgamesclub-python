@@ -244,13 +244,13 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
             if "not enougn balance" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
-                raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+                return
             if "form is being submitted" in text:
                 update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
                 return
             if "players can only deposit again after selecting whether or not to participate in the wager bonus program for the previous deposit !" in text:
                 update_automation_result(task_id=task_id, status="failed", description="Wager Bonus error! User needs to resolve this")
-                raise Exception(f"Wager Bonus error! User needs to resolve this")
+                return
 
     # verify deposit
     try:
@@ -314,7 +314,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
                 logger.error("Recharge failed: backend balance insufficient.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                 finalize_status(t, "failed", id_to_update)
-                raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+                return
             if "form is being submitted" in text:
                 update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
                 finalize_status(t, "failed", id_to_update)
@@ -390,7 +390,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
                 if "the redeem amount can not be greater than the balance on the body！" in text:
                     logger.error("Withdrawal failed due to insufficient gold.")
                     update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
-                    raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
+                    return
                 elif "success" in text:
                     logger.info("Withdraw successful.")
                     update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")

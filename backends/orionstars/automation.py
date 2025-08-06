@@ -173,7 +173,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         elif "insufficient" in result:
             logger.error("Recharge failed: backend balance insufficient.")
             update_automation_result(task_id=task_id, status="failed", description=f"Backend balance insufficient on {BACKEND_NAME}")
-            raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+            return
         elif "unknown" in result:
             logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
@@ -223,7 +223,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.error("Recharge failed: backend balance insufficient.")
             update_automation_result(task_id=task_id, status="failed", description=f"Backend balance insufficient on {BACKEND_NAME}")
             finalize_status(t, "failed", id_to_update)
-            raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+            return
         elif "unknown" in result:
             logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
@@ -294,7 +294,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     if count > float(customer_balance):
         logger.error("Withdraw failed: insufficient customer balance.")
         update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
-        raise Exception(f"Insufficient customer balance for withdrawal: {account_id}")
+        return
 
     redeem.locator("input#txtAddGold").fill(str(count))
 
@@ -314,7 +314,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         elif "not enough gold" in text:
             logger.error("Withdrawal failed due to insufficient gold.")
             update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
-            raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
+            return
         else:
             logger.warning(f"Unexpected withdrawal response: {text}")
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")

@@ -186,7 +186,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                 if "not enougn balance" in text:
                     logger.error("Recharge failed: backend balance insufficient.")
                     update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
-                    raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+                    return
                 if "success" in text:
                     logger.info("Recharge successful.")
                     insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
@@ -244,7 +244,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                     logger.error("Recharge failed: backend balance insufficient.")
                     update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                     finalize_status(t, "failed", id_to_update)
-                    raise Exception(f"Insufficient backend balance for recharge: {account_id}, backend: {BACKEND_NAME}")
+                    return
                 if "success" in text:
                     logger.info("Recharge successful.")
                     insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
@@ -333,7 +333,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                 if "the redeem amount can not be greater than the balance on the body！" in text:
                     logger.error("Withdrawal failed due to insufficient gold.")
                     update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
-                    raise Exception(f"Insufficient customer balance for withdrawal: {account_id}, backend: {BACKEND_NAME}")
+                    return
                 if "success" in text:
                     logger.info("Withdraw successful.")
                     insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
