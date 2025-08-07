@@ -520,7 +520,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
 
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -533,7 +533,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url), backend_id=BACKEND_ID,
         )
         _login_and_navigate(page, logger, backend, task_id)
-        _withdraw_account(page, logger, count, account_id, task_id)
+        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
