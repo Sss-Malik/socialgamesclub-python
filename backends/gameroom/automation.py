@@ -15,7 +15,8 @@ from common.utils.redis_utils import acquire_login_lock, release_login_lock
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, invalidate_latest_session, \
-    create_backend_session, increment_active_tasks_count, decrement_active_tasks_count, finalize_status
+    create_backend_session, increment_active_tasks_count, decrement_active_tasks_count, finalize_status, \
+    mark_redeem_request_status
 from common.utils.browser import with_persistent_browser
 from common.utils.poll_utils import wait_for_valid_session, wait_for_active_tasks_to_zero
 from backends.gameroom.utils.session import inject_session_token, validate_session_token
@@ -209,7 +210,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
             break
 
 
-def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id):
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
     main_iframe = page.frame_locator(MAIN_IFRAME)
 
@@ -243,19 +244,22 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.info("Withdraw successful.")
             update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")
             insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
+            mark_redeem_request_status(redeem_request_id, "processed")
         elif "withdrawal amount is greater than customer balance" in text:
             logger.error("Withdrawal failed due to insufficient gold.")
+            mark_redeem_request_status(redeem_request_id, "failed")
             update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance")
             return
         else:
             logger.warning(f"Unexpected withdrawal response: {text}")
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
+            mark_redeem_request_status(redeem_request_id, "failed")
             insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
     except PlaywrightTimeoutError:
         logger.error("Failed to detect result dialog after account withdrawal.")
         insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url), backend_id=BACKEND_ID)
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdrawal on {BACKEND_NAME}")
-
+        mark_redeem_request_status(redeem_request_id, "failed")
 
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
@@ -528,7 +532,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend.id)
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -546,7 +550,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         session = _login_and_navigate(page, logger, backend, task_id)
         if session:
             increment_active_tasks_count(session.id)
-        _withdraw_account(page, logger, count, account_id, task_id)
+        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,

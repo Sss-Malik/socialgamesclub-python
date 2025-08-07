@@ -1,5 +1,6 @@
 from db import SessionLocal
-from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, WheelSpin
+from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
+    WheelSpin, RedeemRequest
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 
@@ -300,6 +301,25 @@ def mark_spin_status(spin_id, status):
         return False
     finally:
         db.close()
+
+
+def mark_redeem_request_status(idx, status):
+    db = SessionLocal()
+    try:
+        redeem_request = db.query(RedeemRequest).filter(RedeemRequest.id == idx).first()
+        if not redeem_request:
+            return False
+        redeem_request.status = status
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error marking redeem request status: {e}")
+        return False
+    finally:
+        db.close()
+
+
 
 
 def finalize_status(t, status, id_to_update=None):

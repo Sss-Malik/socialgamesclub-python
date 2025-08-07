@@ -12,6 +12,7 @@ class WithdrawAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")
     count: int = Field(1, example=50)
     account_id: str = Field(..., example="abc123")
+    redeem_id: int = Field(..., example=123)
 
 class ReadAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")

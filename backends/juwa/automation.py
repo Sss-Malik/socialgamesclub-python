@@ -15,7 +15,8 @@ from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
-    update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status
+    update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
+    mark_redeem_request_status
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -293,7 +294,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Account read data: {data}")
 
 
-def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id):
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
 
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -333,17 +334,21 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                 if "the redeem amount can not be greater than the balance on the body！" in text:
                     logger.error("Withdrawal failed due to insufficient gold.")
                     update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
+                    mark_redeem_request_status(redeem_request_id, "failed")
                     return
                 if "success" in text:
                     logger.info("Withdraw successful.")
                     insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
                     update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")
+                    mark_redeem_request_status(redeem_request_id, "processed")
                 else:
                     logger.warning(f"Unexpected withdrawal response: {text}")
                     update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
+                    mark_redeem_request_status(redeem_request_id, "failed")
                     insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdrawal on {BACKEND_NAME}")
+        mark_redeem_request_status(redeem_request_id, "failed")
         logger.error("Failed to detect result dialog after account withdrawal.")
         insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url), backend_id=BACKEND_ID)
 
@@ -458,7 +463,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
 
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
     backend = get_backend(BACKEND_NAME)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -471,7 +476,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url), backend_id=BACKEND_ID,
         )
         _login_and_navigate(page, logger, backend, task_id)
-        _withdraw_account(page, logger, count, account_id, task_id)
+        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
