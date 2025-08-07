@@ -122,6 +122,10 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 save_credentials(account_id, password, logger, DATA_DIR)
                 page.locator("#mb_btn_ok").click()
                 break
+            elif "too frequent" in message:
+                logger.warning("automation detected. Aborting...")
+                insert_log("warning", "Automation script detected. Aborting for now", source_url=str(page.url))
+                raise Exception("Automation script detected. Aborting...")
             else:
                 logger.warning(f"Unexpected message after creating account: {message}")
                 insert_log("warning", f"Unexpected create account response: {message}", source_url=str(page.url), backend_id=BACKEND_ID)
@@ -336,7 +340,7 @@ def action_create_account(page: Page, task_id, backend):
             source_url=str(page.url),
             backend_id=backend.id
         )
-        update_automation_result(task_id=task_id, description="Error during account creation.", status="failed", screenshot_url=screenshot_url)
+        update_automation_result(task_id=task_id, description=f"Error during account creation: {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=backend.id)

@@ -132,6 +132,10 @@ def _create_single_account(page: Page, logger: logging.Logger):
             insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
             page.locator("#mb_btn_ok").click()
             break
+        elif "too frequent" in msg:
+            logger.warning("automation detected. Aborting...")
+            insert_log("warning", "Automation script detected. Aborting for now", source_url=str(page.url), backend_id=BACKEND_ID)
+            raise Exception("Automation script detected. Aborting...")
         else:
             logger.warning(f"Unexpected message after creating account: {msg}")
             insert_log("warning", f"Unexpected create account response: {msg}", source_url=str(page.url), backend_id=BACKEND_ID)
