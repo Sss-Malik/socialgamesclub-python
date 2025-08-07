@@ -108,9 +108,11 @@ async def withdraw_account(
     req: WithdrawAccountRequest,
 ):
 
+    redeem_request_id = req.redeem_id
+
     task = invoke_action.apply_async(
         args=[req.backend, "withdraw-account"],
-        kwargs={"account_id": req.account_id, "count": req.count},
+        kwargs={"account_id": req.account_id, "count": req.count, "redeem_request_id": redeem_request_id},
         queue=req.backend
     )
     backend = get_backend(req.backend)

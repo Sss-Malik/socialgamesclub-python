@@ -189,3 +189,22 @@ class WheelSpin(Base):
     updated_at = Column(TIMESTAMP, nullable=True, onupdate=func.now())
 
     user = relationship("User", back_populates="spins")
+
+
+class RedeemRequest(Base):
+    __tablename__ = 'redeem_requests'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=False)
+    username = Column(String(255), nullable=False)
+    game_id = Column(BigInteger, nullable=False)
+    payment_method = Column(String(255), nullable=False)
+    payment_address = Column(String(255), nullable=True)
+    network = Column(String(255), nullable=True)
+    wallet_address = Column(String(255), nullable=True)
+    amount = Column(DECIMAL(10, 6), nullable=False)
+    tip = Column(DECIMAL(10, 6), nullable=False)
+    status = Column(String(255), nullable=False, default='pending')
+    reject_reason = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=True)
