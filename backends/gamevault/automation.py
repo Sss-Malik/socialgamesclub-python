@@ -236,22 +236,37 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
     confirm_btn.wait_for(state="visible", timeout=10_000)
     confirm_btn.click()
 
-    page.wait_for_timeout(1000)
+    try:
+        page.wait_for_selector("p.el-message__content", timeout=5000, state="attached")
+    except PlaywrightTimeoutError:
+        pass
 
     messages = page.locator("p.el-message__content").all()
     for msg in messages:
-        if msg.is_visible():
             text = msg.inner_text().strip().lower()
             if "not enougn balance" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
+                insert_log("warning", description=f"Recharge failed: Backend balance insufficient.", source_url=str(page.url))
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                 return
-            if "form is being submitted" in text:
+            elif "form is being submitted" in text:
+                logger.error("Recharge failed: form is being submitted.")
+                insert_log("warning", description="Form submission error. Try again later.", source_url=str(page.url), backend_id=BACKEND_ID)
                 update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
                 return
-            if "players can only deposit again after selecting whether or not to participate in the wager bonus program for the previous deposit !" in text:
+            elif "players can only deposit again after selecting whether or not to participate in the wager bonus program for the previous deposit !" in text:
+                logger.error("Recharge failed: Wager bonus error")
+                insert_log("warning", description="Wager bonus error", source_url=str(page.url), backend_id=BACKEND_ID)
                 update_automation_result(task_id=task_id, status="failed", description="Wager Bonus error! User needs to resolve this")
                 return
+            elif "success" in text:
+                logger.info("Recharge successful.")
+                insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url),
+                           backend_id=BACKEND_ID)
+                update_order_automation_status(order_id, "finished")
+                update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
+                return
+
 
     # verify deposit
     try:
