@@ -1,6 +1,6 @@
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest
+    WheelSpin, RedeemRequest, AutomationRequest
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 
@@ -319,6 +319,22 @@ def mark_redeem_request_status(idx, status):
     finally:
         db.close()
 
+
+def insert_automation_request(task_id, request_type, payload, status_code=None):
+    db = SessionLocal()
+    try:
+        request = AutomationRequest(
+            task_id=task_id,
+            type=request_type,
+            payload=payload,
+            status_code=status_code
+        )
+        db.add(request)
+        db.commit()
+        db.refresh(request)
+        return request
+    finally:
+        db.close()
 
 
 

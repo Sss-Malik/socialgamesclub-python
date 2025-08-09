@@ -1,5 +1,5 @@
 # casino_automation/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP, Float
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP, Float, CHAR, JSON
 from sqlalchemy.orm import relationship
 from db import Base
 from datetime import datetime
@@ -144,6 +144,13 @@ class AutomationResult(Base):
     # Optional: relationship to User
     user = relationship("User", back_populates="automation_results")
     backend = relationship("BackendGame", back_populates="automation_results")
+    requests = relationship(
+        "AutomationRequest",
+        back_populates="result",
+        primaryjoin="AutomationResult.task_id==foreign(AutomationRequest.task_id)",
+        cascade="all, delete-orphan",
+        uselist=False,  # set to False if you GUARANTEE task_id is unique and want 1:1
+    )
 
 class BackendSession(Base):
     __tablename__ = 'backend_sessions'
@@ -208,3 +215,32 @@ class RedeemRequest(Base):
     reject_reason = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
     updated_at = Column(TIMESTAMP, nullable=True)
+
+
+class AutomationRequest(Base):
+    __tablename__ = "automation_requests"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    task_id = Column(
+        CHAR(36),
+        ForeignKey("automation_results.task_id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    type = Column(
+        Enum("create", "recharge", "freeplay", "withdraw", "read", name="request_type"),
+        nullable=False
+    )
+
+    payload = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    status_code = Column(Integer, nullable=True)
+    result = relationship(
+        "AutomationResult",
+        back_populates="requests",
+        primaryjoin="foreign(AutomationRequest.task_id)==AutomationResult.task_id",
+    )
