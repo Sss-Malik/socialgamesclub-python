@@ -12,7 +12,7 @@ from .schemas import (
 from settings import APP_KEY
 from .tasks import invoke_action
 from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend, \
-    get_referral_bonus, get_spin, get_automation_result
+    get_referral_bonus, get_spin, get_automation_result, insert_automation_request
 import asyncio
 
 app = FastAPI(
@@ -53,6 +53,7 @@ async def create_account(
         user_id=None,
         backend_id=backend.id,
     )
+    insert_automation_request(task_id=task.id, request_type="create", payload={"action": "create-account", **req.dict()})
     return {
         "status": "scheduled",
         "task_id": task.id,
@@ -96,6 +97,7 @@ async def recharge_account(
         backend_id=backend.id,
         order_id=x_order_id
     )
+    insert_automation_request(task_id=task.id, request_type="recharge", payload={"action": "recharge-account", **req.dict()})
     return {
         "status": "scheduled",
         "task_id": task.id,
@@ -122,6 +124,8 @@ async def withdraw_account(
         user_id=None,
         backend_id=backend.id,
     )
+    insert_automation_request(task_id=task.id, request_type="withdraw", payload={"action": "withdraw-account", **req.dict()})
+
     return {
         "status": "scheduled",
         "task_id": task.id,
@@ -148,6 +152,7 @@ async def read_account(
         user_id=None,
         backend_id=backend.id,
     )
+    insert_automation_request(task_id=task.id, request_type="read", payload={"action": "read-account", **req.dict()})
     return {
         "status": "scheduled",
         "task_id": task.id,
@@ -201,6 +206,7 @@ async def recharge_freeplay(
         user_id=user.id,
         backend_id=backend.id,
     )
+    insert_automation_request(task_id=task.id, request_type="freeplay", payload={"action": "freeplay-account", **req.dict()})
     return {
         "status": "scheduled",
         "task_id": task.id,
