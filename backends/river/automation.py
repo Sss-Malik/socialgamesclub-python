@@ -138,6 +138,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         if alert.get_attribute("class").split().count("alert-error"):
             if "not enough credits" in text:
                 logger.error("Recharge failed: backend balance insufficient.")
+                insert_log("error", description="Backend balance insufficient", source_url=str(page.url), backend_id=BACKEND_ID)
                 update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
                 return
         elif alert.get_attribute("class").split().count("alert-success"):
@@ -153,8 +154,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         else:
             logger.warning("Matched an alert, but unknown type: %s", text)
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected alert detected on {BACKEND_NAME}")
+            insert_log("warning", description="Unexpected alert detected on {BACKEND_NAME}", source_url=str(page.url), backend_id=BACKEND_ID)
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}.")
+        insert_log("error", description="Failed to detect result after recharge", source_url=str(page.url), backend_id=BACKEND_ID)
 
 
 def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, t, id_to_update):
