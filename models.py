@@ -41,6 +41,7 @@ class BackendAccount(Base):
 
     backend = relationship("BackendGame", back_populates="accounts")
     user = relationship("User", back_populates="backend_accounts")
+    logs = relationship("Log", back_populates="backend_accounts")
 
 class Log(Base):
     __tablename__ = "logs"
@@ -50,10 +51,12 @@ class Log(Base):
     description = Column(Text)
     source_url = Column(String(255))
     backend_id = Column(BigInteger, ForeignKey('backend_games.id'), nullable=True)
+    account_id = Column(BigInteger, ForeignKey("backend_accounts.id"))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     backend = relationship("BackendGame", back_populates="logs")
+    backend_accounts = relationship("BackendAccount", back_populates="logs")
 
 class User(Base):
     __tablename__ = "users"

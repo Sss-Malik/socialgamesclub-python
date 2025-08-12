@@ -148,6 +148,8 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
+    _ = get_backend_account(account_id)
+
     main_frame = page.frame_locator(MAIN_IFRAME)
     main_frame.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
@@ -172,36 +174,41 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
         if "successful" in result:
             logger.info("Recharge successful.")
-            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
             update_order_automation_status(order_id, "finished")
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
 
-            _ = get_backend_account(account_id)
             if _.user.bonus_received:
                 mark_bonus_transferred(account_id)
 
         elif "insufficient" in result:
             logger.error("Recharge failed: backend balance insufficient.")
             update_automation_result(task_id=task_id, status="failed", description=f"Backend balance insufficient on {BACKEND_NAME}")
+            insert_log("info", "Backend balance insufficient", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+
             update_order_automation_status(order_id, "failed")
             return
         elif "unknown" in result:
             logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
-            insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
             update_order_automation_status(order_id, "failed")
         else:
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
             update_order_automation_status(order_id, "failed")
             logger.warning(f"Unexpected recharge response: {result}")
-            insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
         update_order_automation_status(order_id, "failed")
+        insert_log("warning", f"Failed to detect result after recharge on {BACKEND_NAME}", source_url=str(page.url), backend_id=BACKEND_ID,
+           account_id=_.id)
 
 
 def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, t, id_to_update):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
+    _ = get_backend_account(account_id)
+
     main_frame = page.frame_locator(MAIN_IFRAME)
     main_frame.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
@@ -226,7 +233,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
 
         if "successful" in result:
             logger.info("Recharge successful.")
-            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
             if t == "signup_freeplay":
                 mark_freeplay_transferred(account_id)
@@ -234,18 +241,22 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                 finalize_status(t, True, id_to_update)
         elif "insufficient" in result:
             logger.error("Recharge failed: backend balance insufficient.")
+            insert_log("info", "Backend balance insufficient", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
             update_automation_result(task_id=task_id, status="failed", description=f"Backend balance insufficient on {BACKEND_NAME}")
             return
         elif "unknown" in result:
             logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description=f"Unknown error on {BACKEND_NAME}")
-            insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
         else:
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
             logger.warning(f"Unexpected recharge response: {result}")
-            insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
+        insert_log("info", f"Failed to detect result after recharge on {BACKEND_NAME}", source_url=str(page.url),
+                           backend_id=BACKEND_ID, account_id=_.id)
+
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
@@ -281,6 +292,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
+    _ = get_backend_account(account_id)
 
     main = page.frame_locator(MAIN_IFRAME)
     main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -303,6 +315,8 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     if count > float(customer_balance):
         logger.error("Withdraw failed: insufficient customer balance.")
         update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
+        insert_log("info", "Insufficient customer balance", source_url=str(page.url),
+                   backend_id=BACKEND_ID, account_id=_.id)
         mark_redeem_request_status(redeem_request_id, "failed")
         return
 
@@ -321,20 +335,24 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.info("Withdraw successful.")
             update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")
             mark_redeem_request_status(redeem_request_id, "processed")
-            insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
         elif "not enough gold" in text:
             logger.error("Withdrawal failed due to insufficient gold.")
             update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
+            insert_log("info", "Insufficient customer balance", source_url=str(page.url),
+                       backend_id=BACKEND_ID, account_id=_.id)
             mark_redeem_request_status(redeem_request_id, "failed")
             return
         else:
             logger.warning(f"Unexpected withdrawal response: {text}")
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
             mark_redeem_request_status(redeem_request_id, "failed")
-            insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
+            insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
     except PlaywrightTimeoutError:
         mark_redeem_request_status(redeem_request_id, "failed")
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
+        insert_log("info", f"Failed to detect result after withdraw on {BACKEND_NAME}", source_url=str(page.url),
+                   backend_id=BACKEND_ID, account_id=_.id)
 
 
 @with_persistent_browser
@@ -374,7 +392,7 @@ def action_create_account(page: Page, task_id, backend):
 
     finally:
         logger.info("Create-account action completed.")
-        insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
+        insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
 @with_persistent_browser
 def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend):
@@ -409,7 +427,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
     finally:
         logger.info("Recharge-account action completed.")
-        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
+        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
 
 @with_persistent_browser
@@ -445,7 +463,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
 
     finally:
         logger.info("Recharge-account action completed.")
-        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
+        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
 
 @with_persistent_browser
@@ -480,7 +498,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}", screenshot_url=screenshot_url)
     finally:
         logger.info("Withdraw-account action completed.")
-        insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
+        insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
 @with_persistent_browser
 def action_read_account(page: Page, account_id: str, task_id, backend):
@@ -513,4 +531,4 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Read-account action completed.")
-        insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
+        insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
