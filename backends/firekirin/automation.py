@@ -12,7 +12,7 @@ from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
-    mark_redeem_request_status
+    mark_redeem_request_status, get_backend_account, mark_bonus_transferred
 from common.utils.browser import with_persistent_browser
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -126,7 +126,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 break
             elif "too frequent" in message:
                 logger.warning("automation detected. Aborting...")
-                insert_log("warning", "Automation script detected. Aborting for now", source_url=str(page.url))
+                insert_log("warning", "Automation script detected. Aborting for now", source_url=str(page.url), backend_id=BACKEND_ID)
                 raise Exception("Automation script detected. Aborting...")
             else:
                 logger.warning(f"Unexpected message after creating account: {message}")
@@ -141,6 +141,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
 def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
+
     main = page.frame_locator(MAIN_IFRAME)
     main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main.locator(ACCOUNT_SEARCH_BUTTON).click()
@@ -170,15 +171,23 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID)
             update_order_automation_status(order_id, "finished")
             update_automation_result(task_id=task_id, status="success", description="Recharge successful")
+
+            _ = get_backend_account(account_id)
+            if _.user.bonus_received:
+                mark_bonus_transferred(account_id)
+
         elif "insufficient" in text:
             logger.error("Recharge failed: backend balance insufficient.")
+            update_order_automation_status(order_id, "failed")
             update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance for {BACKEND_NAME}")
             return
         else:
             logger.warning(f"Unexpected recharge response: {text}")
             insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
+            update_order_automation_status(order_id, "failed")
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
     except PlaywrightTimeoutError:
+        update_order_automation_status(order_id, "failed")
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
 
 
@@ -216,20 +225,17 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
             if t == "signup_freeplay":
                 mark_freeplay_transferred(account_id)
             else:
-                finalize_status(t, "success", id_to_update)
+                finalize_status(t, True, id_to_update)
         elif "insufficient" in text:
             logger.error("Recharge failed: backend balance insufficient.")
             update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance for {BACKEND_NAME}")
-            finalize_status(t, "failed", id_to_update)
             return
         else:
             logger.warning(f"Unexpected recharge response: {text}")
             insert_log("warning", f"Unexpected recharge response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
             update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
-            finalize_status(t, "failed", id_to_update)
     except PlaywrightTimeoutError:
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
-        finalize_status(t, "failed", id_to_update)
 
 
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):

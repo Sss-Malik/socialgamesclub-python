@@ -25,6 +25,7 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 S3_BUCKET = os.getenv("AWS_S3_BUCKET_NAME", "casino-automation-screenshots")
 
+API_DELAY_SECONDS = 1
 
 import os
 # Base path for your project root (so we can find backends/)

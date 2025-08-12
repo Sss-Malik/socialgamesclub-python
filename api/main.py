@@ -1,7 +1,12 @@
 # api/main.py
 
-import importlib
-from fastapi import FastAPI, HTTPException, status, Header, Request
+from __future__ import annotations
+
+import asyncio
+from typing import Optional, Literal, Dict, Any
+
+from fastapi import FastAPI, HTTPException, status, Header, Request, Depends
+
 from .schemas import (
     CreateAccountRequest,
     RechargeAccountRequest,
@@ -9,156 +14,196 @@ from .schemas import (
     ReadAccountRequest,
     RechargeFreeplayRequest,
 )
-from settings import APP_KEY
+from settings import APP_KEY, API_DELAY_SECONDS
 from .tasks import invoke_action
-from common.utils.db_actions import get_order, insert_automation_result, get_backend_account, get_backend, \
-    get_referral_bonus, get_spin, get_automation_result, insert_automation_request
-import asyncio
+from common.utils.db_actions import (
+    get_order,
+    insert_automation_result,
+    get_backend_account,
+    get_backend,
+    get_referral_bonus,
+    get_spin,
+    get_automation_result,
+    insert_automation_request,
+)
+
+# ---- App setup ----
 
 app = FastAPI(
     title="Casino Automation API",
     version="1.0.0",
-    description="Run casino automation tasks via HTTP API."
+    description="Run casino automation tasks via HTTP API.",
 )
+
+
 
 @app.middleware("http")
 async def delay_request(request: Request, call_next):
-    await asyncio.sleep(2)
-    response = await call_next(request)
-    return response
+    await asyncio.sleep(API_DELAY_SECONDS)
+    return await call_next(request)
 
 
-def _check_app_key(x_app_key: str):
+# ---- Types / helpers ----
+
+ActionName = Literal[
+    "create-account",
+    "recharge-account",
+    "withdraw-account",
+    "read-account",
+    "freeplay-account",
+]
+
+def _check_app_key(x_app_key: Optional[str]) -> None:
     if x_app_key != APP_KEY:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid APP_KEY"
+            detail="Invalid APP_KEY",
         )
+
+def require_app_key(x_app_key: Optional[str] = Header(None)) -> bool:
+    _check_app_key(x_app_key)
+    return True
+
+def _enqueue_action(
+    *,
+    backend_key: str,
+    action: ActionName,
+    description: str,
+    queue_kwargs: Dict[str, Any],
+    request_type: Literal["create", "recharge", "withdraw", "read", "freeplay"],
+    payload: Dict[str, Any],
+    user_id: Optional[int] = None,
+    order_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Centralizes Celery scheduling + logging so each endpoint stays tiny.
+    Preserves all side-effects and response shape.
+    """
+    task = invoke_action.apply_async(
+        args=[backend_key, action],
+        kwargs=queue_kwargs,
+        queue=backend_key,
+    )
+
+    backend = get_backend(backend_key)
+
+    insert_automation_result(
+        task_id=task.id,
+        description=description,
+        user_id=user_id,
+        backend_id=backend.id,
+        order_id=order_id,
+    )
+
+    insert_automation_request(
+        task_id=task.id,
+        request_type=request_type,
+        payload={"action": action, **payload},
+    )
+
+    # Response shape must remain the same
+    return {
+        "status": "scheduled",
+        "task_id": task.id,
+        **payload,
+        "action": action,
+    }
+
+
+# ---- Routes ----
 
 @app.post("/automation/create-account")
 async def create_account(
     req: CreateAccountRequest,
-    x_app_key: str = Header(None)
+    _: bool = Depends(require_app_key),
 ):
-    _check_app_key(x_app_key)
-
-    task = invoke_action.apply_async(
-        args=[req.backend, "create-account"],
-        queue=req.backend
-    )
-    backend = get_backend(req.backend)
-    insert_automation_result(
-        task_id=task.id,
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="create-account",
         description="Initiate account creation",
+        queue_kwargs={},
+        request_type="create",
+        payload=req.dict(),
         user_id=None,
-        backend_id=backend.id,
     )
-    insert_automation_request(task_id=task.id, request_type="create", payload={"action": "create-account", **req.dict()})
-    return {
-        "status": "scheduled",
-        "task_id": task.id,
-        **req.dict(),
-        "action": "create-account"
-    }
+
 
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
-    x_order_id: str = Header(None),
+    x_order_id: Optional[str] = Header(None),
 ):
+    if not x_order_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing order header")
 
     order = get_order(x_order_id)
+
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
+
+    if not order.user:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User not found")
+
     if order.status != "finished":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Order not finished")
+
     if order.automation_status == "finished":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already processed")
 
     automation_result = get_automation_result(x_order_id)
-
     if automation_result and automation_result.status == "pending":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Task for this order id is already running")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Task for this order id is already running",
+        )
 
-    task = invoke_action.apply_async(
-        args=[req.backend, "recharge-account"],
-        kwargs={
-            "account_id": req.account_id,
-            "count": req.count,
-            "order_id": x_order_id
-        },
-        queue=req.backend
-    )
-    backend = get_backend(req.backend)
-    insert_automation_result(
-        task_id=task.id,
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="recharge-account",
         description="Initiate account recharge",
+        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id},
+        request_type="recharge",
+        payload=req.dict(),
         user_id=order.user.id,
-        backend_id=backend.id,
-        order_id=x_order_id
+        order_id=x_order_id,
     )
-    insert_automation_request(task_id=task.id, request_type="recharge", payload={"action": "recharge-account", **req.dict()})
-    return {
-        "status": "scheduled",
-        "task_id": task.id,
-        **req.dict(),
-        "action": "recharge-account"
-    }
+
 
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
     req: WithdrawAccountRequest,
 ):
-
-    redeem_request_id = req.redeem_id
-
-    task = invoke_action.apply_async(
-        args=[req.backend, "withdraw-account"],
-        kwargs={"account_id": req.account_id, "count": req.count, "redeem_request_id": redeem_request_id},
-        queue=req.backend
-    )
-    backend = get_backend(req.backend)
-    insert_automation_result(
-        task_id=task.id,
+    # Keep same behavior: no APP_KEY check and use redeem_id from payload
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="withdraw-account",
         description="Initiate account withdrawal",
+        queue_kwargs={
+            "account_id": req.account_id,
+            "count": req.count,
+            "redeem_request_id": req.redeem_id,
+        },
+        request_type="withdraw",
+        payload=req.dict(),
         user_id=None,
-        backend_id=backend.id,
     )
-    insert_automation_request(task_id=task.id, request_type="withdraw", payload={"action": "withdraw-account", **req.dict()})
 
-    return {
-        "status": "scheduled",
-        "task_id": task.id,
-        **req.dict(),
-        "action": "withdraw-account"
-    }
 
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
-    x_app_key: str = Header(None),
+    _: bool = Depends(require_app_key),
 ):
-    _check_app_key(x_app_key)
-
-    task = invoke_action.apply_async(
-        args=[req.backend, "read-account"],
-        kwargs={"account_id": req.account_id},
-        queue=req.backend
-    )
-    backend = get_backend(req.backend)
-    insert_automation_result(
-        task_id=task.id,
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="read-account",
         description="Initiate account read",
+        queue_kwargs={"account_id": req.account_id},
+        request_type="read",
+        payload=req.dict(),
         user_id=None,
-        backend_id=backend.id,
     )
-    insert_automation_request(task_id=task.id, request_type="read", payload={"action": "read-account", **req.dict()})
-    return {
-        "status": "scheduled",
-        "task_id": task.id,
-        **req.dict(),
-        "action": "read-account"
-    }
+
 
 @app.post("/automation/freeplay")
 async def recharge_freeplay(
@@ -170,15 +215,16 @@ async def recharge_freeplay(
 
     user = backend_account.user
     t = req.type
-    count = None
-    id_to_update = None
+    count: Optional[int] = None
+    id_to_update: Optional[int] = None
 
     if t == "referral_freeplay":
         referral_bonus = get_referral_bonus(user.id)
-        if referral_bonus.status != "pending":
+        if referral_bonus.status != "processed":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Referral freeplay already claimed")
         count = referral_bonus.bonus_amount
         id_to_update = referral_bonus.id
+
     elif t == "reward_freeplay":
         spin = get_spin(user.id)
         if spin.status != "pending":
@@ -187,29 +233,26 @@ async def recharge_freeplay(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Type mismatch for request")
         count = spin.reward
         id_to_update = spin.id
+
     elif t == "signup_freeplay":
         if user.freeplay_transferred:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Freeplay already transferred")
-        if user.freeplay_amount is None or user.freeplay_amount == 0:
+        if not user.freeplay_amount:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "This user is not eligible for signup freeplay")
         count = user.freeplay_amount
 
-    task = invoke_action.apply_async(
-        args=[req.backend, "freeplay-account"],
-        kwargs={"account_id": req.account_id, "count": int(count), "t": t, "id_to_update": id_to_update},
-        queue=req.backend
-    )
-    backend = get_backend(req.backend)
-    insert_automation_result(
-        task_id=task.id,
+    # count must be present by here
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="freeplay-account",
         description="Initiate freeplay transfer",
+        queue_kwargs={
+            "account_id": req.account_id,
+            "count": int(count),
+            "t": t,
+            "id_to_update": id_to_update,
+        },
+        request_type="freeplay",
+        payload=req.dict(),
         user_id=user.id,
-        backend_id=backend.id,
     )
-    insert_automation_request(task_id=task.id, request_type="freeplay", payload={"action": "freeplay-account", **req.dict()})
-    return {
-        "status": "scheduled",
-        "task_id": task.id,
-        **req.dict(),
-        "action": "freeplay-account"
-    }
