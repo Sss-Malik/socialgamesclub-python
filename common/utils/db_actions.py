@@ -64,10 +64,10 @@ def update_order_automation_status(order_id: str, new_status: str):
 
 
 
-def insert_log(log_type, description, source_url=None, backend_id=None):
+def insert_log(log_type, description, source_url=None, backend_id=None, account_id=None):
     db = SessionLocal()
     try:
-        log = Log(type=log_type, description=description, source_url=source_url, backend_id=backend_id)
+        log = Log(type=log_type, description=description, source_url=source_url, backend_id=backend_id, account_id=account_id)
         db.add(log)
         db.commit()
     finally:
