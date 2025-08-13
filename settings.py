@@ -25,6 +25,19 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 S3_BUCKET = os.getenv("AWS_S3_BUCKET_NAME", "casino-automation-screenshots")
 
+API_DELAY_SECONDS = 1
+
+
+MAIL_HOST = os.getenv("MAIL_HOST", "smtp.sendgrid.net")
+MAIL_PORT = os.getenv("MAIL_PORT", "587")
+MAIL_USERNAME = os.getenv("MAIL_USERNAME", "apikey")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+MAIL_ENCRYPTION = os.getenv("MAIL_ENCRYPTION")
+MAIL_FROM_ADDRESS = os.getenv("MAIL_FROM_ADDRESS")
+MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME")
+
+
+MAIL_RECIPIENT = ["zaeemaslam852@gmail.com", "samadmalik@hotmail.com", "msaud946@gmail.com"]
 
 import os
 # Base path for your project root (so we can find backends/)

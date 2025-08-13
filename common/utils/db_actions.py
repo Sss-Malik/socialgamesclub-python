@@ -2,7 +2,7 @@ from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
     WheelSpin, RedeemRequest, AutomationRequest
 from sqlalchemy.orm import joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 def get_backend(name):
     db = SessionLocal()
@@ -64,10 +64,10 @@ def update_order_automation_status(order_id: str, new_status: str):
 
 
 
-def insert_log(log_type, description, source_url=None, backend_id=None):
+def insert_log(log_type, description, source_url=None, backend_id=None, account_id=None):
     db = SessionLocal()
     try:
-        log = Log(type=log_type, description=description, source_url=source_url, backend_id=backend_id)
+        log = Log(type=log_type, description=description, source_url=source_url, backend_id=backend_id, account_id=account_id)
         db.add(log)
         db.commit()
     finally:
@@ -180,6 +180,32 @@ def mark_freeplay_transferred(account_id: str) -> bool:
         db.close()
 
 
+def mark_bonus_transferred(account_id: str) -> bool:
+    db = SessionLocal()
+    try:
+        backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user))\
+            .filter(
+                BackendAccount.username == account_id,
+                BackendAccount.deleted_at == None
+            )\
+            .first()
+
+        if not backend_account or not backend_account.user:
+            return False  # account or user not found
+
+        backend_account.user.bonus_transferred = True
+        db.commit()
+        return True  # successfully updated
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating bonus_transferred: {e}")
+        return False
+    finally:
+        db.close()
+
+
+
 def get_session(session_id: int, db=None):
     external = db is not None
     db = db or SessionLocal()
@@ -268,6 +294,7 @@ def mark_referral_bonus_status(referral_bonus_id, status):
             return False
 
         referral_bonus.status = status
+        referral_bonus.claimed_at = func.now()
         db.commit()
         return True
 
@@ -338,8 +365,10 @@ def insert_automation_request(task_id, request_type, payload, status_code=None):
 
 
 
-def finalize_status(t, status, id_to_update=None):
+def finalize_status(t, status: bool, id_to_update=None):
     if t == "referral_freeplay":
-        mark_referral_bonus_status(id_to_update, status)
+        if status:
+            mark_referral_bonus_status(id_to_update, "claimed")
     elif t == "reward_freeplay":
-        mark_spin_status(id_to_update, status)
+        if status:
+            mark_spin_status(id_to_update, "success")
