@@ -8,6 +8,7 @@ from backends.milkyway.config import *
 from backends.milkyway.utils.credentials import generate_credentials
 from backends.milkyway.utils.actions import click_update_for_account
 from common.utils.aws_s3 import capture_and_upload_screenshot
+from common.utils.emails import send_email
 
 from common.utils.ensure_directories import ensure_directories
 from common.utils.save_credentials import save_credentials
@@ -136,7 +137,9 @@ def _create_single_account(page: Page, logger: logging.Logger):
         elif "too frequent" in msg:
             logger.warning("automation detected. Aborting...")
             insert_log("warning", "Automation script detected. Aborting for now", source_url=str(page.url), backend_id=BACKEND_ID)
-            raise Exception("Automation script detected. Aborting...")
+            raise Exception(
+                f"Automation script detected on {BACKEND_NAME} while creating accounts. Please try again later.")
+
         else:
             logger.warning(f"Unexpected message after creating account: {msg}")
             insert_log("warning", f"Unexpected create account response: {msg}", source_url=str(page.url), backend_id=BACKEND_ID)
@@ -188,6 +191,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             insert_log("warning", "Backend balance insufficient", source_url=str(page.url),
                        backend_id=BACKEND_ID, account_id=_.id)
             update_order_automation_status(order_id, "failed")
+            send_email(
+                subject="Recharge failed",
+                body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
+            )
             return
         elif "unknown" in text:
             logger.warning("Unknown error.")
@@ -245,12 +252,15 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                 finalize_status(t, True, id_to_update)
         elif "insufficient" in text:
             logger.error("Recharge failed: backend balance insufficient.")
+            send_email(
+                subject="Recharge failed",
+                body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
+            )
             insert_log("warning", "Backend balance insufficient", source_url=str(page.url),
                        backend_id=BACKEND_ID, account_id=_.id)
             update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
             return
         elif "unknown" in text:
-            logger.warning("Unknown error.")
             update_automation_result(task_id=task_id, status="failed", description="Unknown error.")
             insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
         else:
@@ -384,6 +394,10 @@ def action_create_account(page: Page, task_id, backend):
         )
         logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account creation: %s", e, exc_info=True)
+        send_email(
+            subject="Account creation failed",
+            body=f"Critical error occurred during account creation for backend '{BACKEND_NAME}'. Please review",
+        )
         insert_log(
             "error",
             f"Error during account creation: {e}",
@@ -419,6 +433,10 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
+        send_email(
+            subject="Account recharge failed",
+            body=f"Critical error occurred during account recharge for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
         insert_log(
             "error",
             f"Error during account recharge: {e}",
@@ -455,6 +473,10 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         )
         logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account recharge: %s", e, exc_info=True)
+        send_email(
+            subject="Account recharge failed",
+            body=f"Critical error occurred during freeplay recharge for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
         insert_log(
             "error",
             f"Error during account recharge: {e}",
@@ -491,6 +513,10 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         )
         logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account withdrawal: %s", e, exc_info=True)
+        send_email(
+            subject="Account withdrawal failed",
+            body=f"Critical error occurred during account withdrawal for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
         insert_log(
             "error",
             f"Error during account withdrawal: {e}",
@@ -525,6 +551,10 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
         logger.error("Screenshot captured and uploaded: %s", screenshot_url)
         logger.critical("Error during account read: %s", e, exc_info=True)
+        send_email(
+            subject="Account read failed",
+            body=f"Critical error occurred during reading account {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
         insert_log(
             "error",
             f"Error during account read: {e}",
