@@ -57,6 +57,8 @@ def update_order_automation_status(order_id: str, new_status: str):
         if not order:
             return None
         order.automation_status = new_status
+        if new_status == "failed":
+            order.status = "pending"
         db.commit()
         return order
     finally:
