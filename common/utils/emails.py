@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from typing import Any, Iterable, Mapping, Union
 
 from settings import (
+    ACTIVATE_EMAILS,
     MAIL_FROM_ADDRESS,
     MAIL_FROM_NAME,
     MAIL_PASSWORD,
@@ -59,6 +60,11 @@ def send_email(
     - `to_email` can be a single address or an iterable of addresses.
     - `body` can be str | dict | list/tuple (dicts/lists are pretty-formatted).
     """
+
+    if not ACTIVATE_EMAILS:
+        print("Emails deactivated skipping")
+        return
+
     # --- Validate config from settings ---
     if not MAIL_HOST:
         raise ValueError("MAIL_HOST is not set.")

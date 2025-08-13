@@ -36,7 +36,7 @@ MAIL_ENCRYPTION = os.getenv("MAIL_ENCRYPTION")
 MAIL_FROM_ADDRESS = os.getenv("MAIL_FROM_ADDRESS")
 MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME")
 
-
+ACTIVATE_EMAILS = os.getenv("ACTIVATE_EMAILS", "True").lower() == "true"
 MAIL_RECIPIENT = ["zaeemaslam852@gmail.com", "samadmalik@hotmail.com", "msaud946@gmail.com"]
 
 import os
