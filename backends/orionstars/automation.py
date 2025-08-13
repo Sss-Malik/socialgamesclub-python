@@ -405,7 +405,7 @@ def action_create_account(page: Page, task_id, backend):
 
     finally:
         logger.info("Create-account action completed.")
-        insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+        insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID)
 
 @with_persistent_browser
 def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend):
