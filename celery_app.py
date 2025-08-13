@@ -81,8 +81,8 @@ celery_app.conf.update(
     # concurrency from env or default to 8
     worker_concurrency=int(os.getenv("WORKER_CONCURRENCY", 8)),
     # hard and soft time limits (seconds) → 10 minutes
-    task_time_limit=600,
-    task_soft_time_limit=600,
+    task_time_limit=1200,
+    task_soft_time_limit=1200,
     # JSON serialization
     task_serializer="json",
     accept_content=["json"],
