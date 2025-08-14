@@ -21,6 +21,7 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
+import random
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.info("Initiating login process.")
@@ -92,6 +93,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 def _create_single_account(page: Page, logger: logging.Logger):
     logger.debug("Opening create account dialog.")
     while True:
+        delay = random.randint(1000, 6000)
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
@@ -101,6 +103,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
         page.locator(ACCOUNT_ID).fill(account_id)
         page.locator(ACCOUNT_PASSWORD).fill(password)
         page.locator(CONFIRM_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
         page.locator(CREATE_ACCOUNT).click()
 
         page.wait_for_timeout(1000)
@@ -122,6 +125,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
                         logger.info("Account created successfully: %s", account_id)
                         save_credentials(account_id, password, logger, DATA_DIR)
                         insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
+                        page.wait_for_timeout(delay)
                         success = True
                         break
                     else:

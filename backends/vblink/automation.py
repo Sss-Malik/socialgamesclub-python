@@ -7,7 +7,7 @@ from backends.vblink.utils.credentials import generate_credentials
 from backends.vblink.utils.actions import click_set_score
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
-
+import random
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.poll_utils import wait_for_valid_session, wait_for_active_tasks_to_zero
@@ -124,6 +124,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
     while True:
+        delay = random.randint(1000, 6000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials()
@@ -131,6 +132,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
         page.locator(ACCOUNT_ID).fill(account_id)
         page.locator(ACCOUNT_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
         ok_button = page.locator("div.el-form-item__content >> button.el-button--primary:has-text('OK')")
         ok_button.first.click()
 

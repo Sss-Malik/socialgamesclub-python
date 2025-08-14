@@ -8,7 +8,7 @@ from backends.gameroom.utils.actions import click_recharge_for_account
 from backends.gameroom.utils.actions import click_withdraw_for_account
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
-
+import random
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
@@ -175,6 +175,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
     dialog_iframe.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
     while True:
+        delay = random.randint(1000, 6000)
         account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
@@ -182,7 +183,9 @@ def _create_single_account(page: Page, logger: logging.Logger):
         dialog_iframe.locator(ACCOUNT_BALANCE).fill("0")
         dialog_iframe.locator(ACCOUNT_PASSWORD).fill(password)
         dialog_iframe.locator(CONFIRM_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
         dialog_iframe.locator(CREATE_ACCOUNT).click()
+        page.wait_for_timeout(delay)
 
         try:
             # wait for the post‐submit message
@@ -192,6 +195,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
             
             if "username already exists" in text:
                 logger.warning(f"Account ID already exists: {account_id}")
+                page.wait_for_timeout(delay)
                 continue
             elif "successful" in text:
                 logger.info("Account created successfully: %s", account_id)
@@ -199,15 +203,18 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 save_credentials(account_id, password, logger, DATA_DIR)
                 page.wait_for_timeout(1_000)
                 main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
+                page.wait_for_timeout(delay)
                 break
             else:
                 logger.warning(f"Unexpected message after creating account: {text}")
                 insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
+                page.wait_for_timeout(delay)
                 break
 
         except PlaywrightTimeoutError:
             logger.error("Failed to detect result dialog after account creation.")
             insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url), backend_id=BACKEND_ID)
+            page.wait_for_timeout(delay)
             break
 
 
