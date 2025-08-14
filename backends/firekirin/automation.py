@@ -1,7 +1,7 @@
 import logging
 import json
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
-
+import random
 from backends.firekirin.config import *
 from backends.firekirin.utils.credentials import generate_credentials
 from backends.firekirin.utils.actions import click_update_for_account
@@ -103,13 +103,15 @@ def _create_single_account(page: Page, logger: logging.Logger):
     dialog = page.frame_locator(CREATE_ACCOUNT_DIALOG)
 
     while True:
+        delay = random.randint(1000, 10000)
         account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
         dialog.locator(ACCOUNT_ID).fill(account_id)
         dialog.locator(ACCOUNT_PASSWORD).fill(password)
         dialog.locator(CONFIRM_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
         dialog.locator(CREATE_ACCOUNT).click()
-
+        page.wait_for_timeout(delay)
         try:
             result = page.locator("#mb_con")
             result.wait_for(timeout=25000, state="visible")
@@ -118,12 +120,14 @@ def _create_single_account(page: Page, logger: logging.Logger):
             if "already exists" in message:
                 logger.warning(f"Account ID already exists: {account_id}")
                 page.locator("#mb_btn_ok").click()
+                page.wait_for_timeout(delay)
                 continue
             elif "success" in message:
                 logger.info("Account created successfully: %s", account_id)
                 insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
                 save_credentials(account_id, password, logger, DATA_DIR)
                 page.locator("#mb_btn_ok").click()
+                page.wait_for_timeout(delay)
                 break
             elif "too frequent" in message:
                 logger.warning("automation detected. Aborting...")
@@ -132,10 +136,12 @@ def _create_single_account(page: Page, logger: logging.Logger):
             else:
                 logger.warning(f"Unexpected message after creating account: {message}")
                 insert_log("warning", f"Unexpected create account response: {message}", source_url=str(page.url), backend_id=BACKEND_ID)
+                page.wait_for_timeout(delay)
                 break
         except PlaywrightTimeoutError:
             logger.error("Failed to detect result dialog after account creation.")
             insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url), backend_id=BACKEND_ID)
+            page.wait_for_timeout(delay)
             break
 
 

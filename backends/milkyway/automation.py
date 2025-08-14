@@ -1,7 +1,6 @@
-# automation_milkyway.py
+import random
 import json
 import logging
-import re
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from backends.milkyway.config import *
@@ -112,14 +111,16 @@ def _create_single_account(page: Page, logger: logging.Logger):
     dialog = page.frame_locator(CREATE_ACCOUNT_DIALOG)
 
     while True:
+        delay = random.randint(1000, 10000)
         account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
         dialog.locator(ACCOUNT_ID).fill(account_id)
         dialog.locator(ACCOUNT_PASSWORD).fill(password)
         dialog.locator(CONFIRM_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
         dialog.locator(CREATE_ACCOUNT).click()
-
+        page.wait_for_timeout(delay)
         # Wait for the feedback modal
         page.locator("#mb_con").wait_for(timeout=10_000)
         msg = page.locator("#mb_msg").inner_text().strip().lower()
@@ -127,12 +128,14 @@ def _create_single_account(page: Page, logger: logging.Logger):
         if "already exists" in msg:
             logger.warning(f"Account ID already exists: {account_id}")
             page.locator("#mb_btn_ok").click()
+            page.wait_for_timeout(delay)
             continue
         elif "success" in msg:
             logger.info("Account created successfully: %s", account_id)
             save_credentials(account_id, password, logger, DATA_DIR)
             insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
             page.locator("#mb_btn_ok").click()
+            page.wait_for_timeout(delay)
             break
         elif "too frequent" in msg:
             logger.warning("automation detected. Aborting...")
@@ -144,6 +147,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
             logger.warning(f"Unexpected message after creating account: {msg}")
             insert_log("warning", f"Unexpected create account response: {msg}", source_url=str(page.url), backend_id=BACKEND_ID)
             page.locator("#mb_btn_ok").click()
+            page.wait_for_timeout(delay)
             break
 
 

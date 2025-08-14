@@ -1,7 +1,7 @@
 import random
 import string
 
-from backends.firekirin.config import BACKEND_SIGNATURE
+from backends.milkyway.config import BACKEND_SIGNATURE
 
 def generate_credentials():
     def random_number_str(max_len):
