@@ -185,7 +185,6 @@ def _create_single_account(page: Page, logger: logging.Logger):
         dialog_iframe.locator(CONFIRM_PASSWORD).fill(password)
         page.wait_for_timeout(delay)
         dialog_iframe.locator(CREATE_ACCOUNT).click()
-        page.wait_for_timeout(delay)
 
         try:
             # wait for the post‐submit message
