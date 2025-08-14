@@ -389,7 +389,7 @@ def action_create_account(page: Page, task_id, backend):
             logger.info("Creating account %d of %d", i + 1, count)
             _create_single_account(page, logger)
             page.reload(wait_until="domcontentloaded")
-        update_automation_result(task_id=task_id, status="succcess", description="Account creation successful.")
+        update_automation_result(task_id=task_id, status="success", description="Account creation successful.")
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
