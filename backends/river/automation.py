@@ -2,7 +2,7 @@
 import json
 import logging
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
-
+import random
 from backends.river.config import *
 from backends.river.utils.credentials import generate_credentials
 from backends.river.utils.actions import click_purchase_for_account
@@ -68,10 +68,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
 def _create_single_account(page: Page, logger: logging.Logger):
     logger.debug("Opening create account dialog.")
-
+    delay = random.randint(1000, 6000)
     page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=15_000)
 
     page.locator(ACCOUNT_BALANCE).fill("0")
+    page.wait_for_timeout(delay)
     page.locator(CREATE_ACCOUNT).click()
 
     # wait for feedback
@@ -85,10 +86,12 @@ def _create_single_account(page: Page, logger: logging.Logger):
             account_id = alert.locator("b").nth(0).inner_text().strip()
             logger.info("Account created successfully: %s", account_id)
             insert_backend_account(username=account_id, password="NULL", backend_id=BACKEND_ID)
+            page.wait_for_timeout(delay)
             save_credentials(account_id, "null", logger, DATA_DIR)
         else:
             logger.warning(f"Unexpected message after creating account: {text}")
             insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url), backend_id=BACKEND_ID)
+            page.wait_for_timeout(delay)
     except PlaywrightTimeoutError:
         logger.error("Failed to detect result dialog after account creation.")
         insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url), backend_id=BACKEND_ID)

@@ -2,7 +2,7 @@
 import json
 import logging
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
-
+import random
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
 from common.utils.logger import get_backend_logger
@@ -116,6 +116,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
 
 
     while True:
+        delay = random.randint(1000, 6000)
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
@@ -125,6 +126,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
         page.locator(ACCOUNT_ID).fill(account_id)
         page.locator(ACCOUNT_PASSWORD).fill(password)
         page.locator(CONFIRM_PASSWORD).fill(password)
+        page.wait_for_timeout(delay)
 
 
         page.locator(CREATE_ACCOUNT).click()
@@ -162,6 +164,7 @@ def _create_single_account(page: Page, logger: logging.Logger):
                 logger.info("Account created successfully: %s", account_id)
                 save_credentials(account_id, password, logger, DATA_DIR)
                 insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
+                page.wait_for_timeout(delay)
                 break
             else:
                 logger.warning(f"Unexpected message after creating account: {text}")
