@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 
 from backends.vblink.config import *
 from backends.vblink.utils.credentials import generate_credentials
-from backends.vblink.utils.actions import click_set_score
+from backends.vblink.utils.actions import click_set_score, click_edit
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
 import random
@@ -15,7 +15,7 @@ from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_order_automation_status, \
     update_automation_result, mark_freeplay_transferred, increment_active_tasks_count, decrement_active_tasks_count, \
     invalidate_latest_session, create_backend_session, finalize_status, mark_redeem_request_status, get_backend_account, \
-    mark_bonus_transferred
+    mark_bonus_transferred, update_password_by_username
 from common.utils.browser import with_persistent_browser
 from backends.ultrapanda.utils.session import inject_session_token, validate_session_token
 from common.utils.redis_utils import acquire_login_lock, release_login_lock
@@ -466,6 +466,86 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
         break
 
 
+
+def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id: str):
+    logger.info(f"Initiating reset password: account_id={account_id}")
+    _ = get_backend_account(account_id)
+    __, password = generate_credentials()
+
+    for attempt in range(5):
+        page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        page.locator("label.el-radio", has_text="Player account").click()
+
+        page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+        page.locator("form.el-form.m-fm button:has-text('OK')").first.click()
+
+        page.wait_for_timeout(1000)
+
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=2000)
+            text = err.inner_text().strip().lower()
+            if "error: 167" in text or "frequency of requests is too high" in text:
+                logger.warning("Frequency too high, retrying…")
+                continue
+        except PlaywrightTimeoutError:
+            logger.info("No error message, proceeding…")
+
+        # open the score‐setting UI
+        click_edit(page, account_id, logger)
+
+        # check for rate‐limit error
+        try:
+            err = page.locator("p.el-message__content")
+            err.wait_for(state="visible", timeout=2000)
+            text = err.inner_text().strip().lower()
+            if "error: 167" in text or "frequency of requests is too high" in text:
+                logger.warning("Frequency too high, retrying…")
+                continue
+        except PlaywrightTimeoutError:
+            logger.info("No error message, proceeding…")
+
+        # fill in points
+        inp = page.locator('input[placeholder="Length must be 6-16 characters! Must include a combination of numbers and letters, and allows some special characters: !@#$%^/.,()"]')
+        inp.wait_for(timeout=5_000, state="visible")
+        inp.fill(password)
+        if DEBUG:
+            input("Debug mode activated. Press enter to continue...")
+
+        ok_btn = page.get_by_role("button", name="OK").nth(1)
+        ok_btn.click()
+
+        msg_box = page.locator(".el-message-box:visible")
+        msg_box.wait_for(state="visible", timeout=10000)
+        ok_btn = msg_box.get_by_role("button", name="OK")
+        ok_btn.click()
+
+        try:
+            result = page.locator("p.el-message__content")
+            result.wait_for(state="visible", timeout=5000)
+            text = result.inner_text().strip().lower()
+            if "sucessful operation" in text:
+                logger.info("Password reset successful.")
+                insert_log("info", description=f"Password reset successful for account {account_id}", source_url=str(page.url),
+                           backend_id=BACKEND_ID, account_id=_.id)
+                update_automation_result(task_id=task_id, description="Password reset successful.", status="success",
+                                         data=json.dumps({"password": password}))
+                update_password_by_username(username=account_id, new_password=password)
+            else:
+                logger.warning(f"Password reset failed. Unhandled reset response: {text}")
+                insert_log("error", description=f"Password reset failed. Unhandled reset response: {text}",
+                           source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+                update_automation_result(task_id=task_id,
+                                         description=f"Password reset failed. Unhandled reset response: {text}",
+                                         status="failed")
+        except PlaywrightTimeoutError:
+            logger.warning("Password reset failed. Failed to detect result after reset")
+            insert_log("error", description="Failed to detect reset response", source_url=str(page.url), backend_id=BACKEND_ID,
+                       account_id=_.id)
+            update_automation_result(task_id=task_id, description="Failed to detect reset response", status="failed")
+        break
+
+
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):
     backend = get_backend(BACKEND_NAME)
@@ -694,3 +774,47 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
             decrement_active_tasks_count(session.id)
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+
+
+
+@with_persistent_browser
+def action_reset_password(page: Page, account_id: str, task_id, backend):
+    backend = get_backend(BACKEND_NAME)
+    _ = get_backend_account(account_id)
+
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("Reset-password action started: account_id=%s", account_id)
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
+            backend_id=backend.id, account_id=_.id
+        )
+        _login_and_navigate(page, logger, backend, task_id)
+        _reset_password(page, logger, account_id, task_id)
+    except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
+        logger.critical("Error during account password reset: %s", e, exc_info=True)
+        send_email(
+            subject="Account password reset failed",
+            body=f"Critical error occurred during reset password for {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
+        insert_log(
+            "error",
+            f"Error during account password reset: {e}",
+            source_url=str(page.url),
+            backend_id=backend.id,
+            account_id=_.id
+        )
+        update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
+    finally:
+        logger.info("Reset-password action completed.")
+        insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend.id, account_id=_.id)

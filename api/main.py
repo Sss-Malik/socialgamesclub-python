@@ -12,7 +12,7 @@ from .schemas import (
     RechargeAccountRequest,
     WithdrawAccountRequest,
     ReadAccountRequest,
-    RechargeFreeplayRequest,
+    RechargeFreeplayRequest, ResetPasswordRequest,
 )
 from settings import APP_KEY, API_DELAY_SECONDS
 from .tasks import invoke_action
@@ -51,6 +51,7 @@ ActionName = Literal[
     "withdraw-account",
     "read-account",
     "freeplay-account",
+    "reset-password"
 ]
 
 def _check_app_key(x_app_key: Optional[str]) -> None:
@@ -70,7 +71,7 @@ def _enqueue_action(
     action: ActionName,
     description: str,
     queue_kwargs: Dict[str, Any],
-    request_type: Literal["create", "recharge", "withdraw", "read", "freeplay"],
+    request_type: Literal["create", "recharge", "withdraw", "read", "freeplay", "reset-password"],
     payload: Dict[str, Any],
     user_id: Optional[int] = None,
     order_id: Optional[str] = None,
@@ -255,4 +256,22 @@ async def recharge_freeplay(
         request_type="freeplay",
         payload=req.dict(),
         user_id=user.id,
+    )
+
+@app.post("/automation/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    backend_account = get_backend_account(req.account_id)
+    if not backend_account or not backend_account.user:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
+
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="reset-password",
+        description="Initiate password reset",
+        queue_kwargs={
+            "account_id": req.account_id,
+        },
+        request_type="reset-password",
+        payload=req.dict(),
+        user_id=backend_account.user.id,
     )

@@ -27,12 +27,22 @@ def generate_credentials():
 
     # Generate password with letters and digits only, between 6 to 12 characters
     def generate_password():
+        specials = "!#@"
+        letters_upper = string.ascii_uppercase
+        letters_lower = string.ascii_lowercase
+        digits = string.digits
+
+        allowed_chars = letters_upper + letters_lower + digits + specials
+
         while True:
-            password_length = random.randint(6, 12)
-            password_chars = string.ascii_letters + string.digits
-            password = ''.join(random.choices(password_chars, k=password_length))
-            if any(c.isalpha() for c in password) and any(c.isdigit() for c in password):
-                return password
+            length = random.randint(6, 12)
+            x = ''.join(random.choices(allowed_chars, k=length))
+
+            if (any(c.isupper() for c in x) and
+                    any(c.islower() for c in x) and
+                    any(c.isdigit() for c in x) and
+                    any(c in specials for c in x)):
+                return x
 
     password = generate_password()
 
