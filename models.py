@@ -232,7 +232,7 @@ class AutomationRequest(Base):
     )
 
     type = Column(
-        Enum("create", "recharge", "freeplay", "withdraw", "read", name="request_type"),
+        Enum("create", "recharge", "freeplay", "withdraw", "read", "reset-password", name="request_type"),
         nullable=False
     )
 

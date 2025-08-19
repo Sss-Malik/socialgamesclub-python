@@ -81,3 +81,42 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
 
     logger.info(f"✅ Clicked 'Redeem' from dropdown for Username: {account_id}")
 
+def click_reset_password_for_account(page: Page, account_id: str, logger):
+    logger.debug(f"Searching for reset password dropdown for Username: {account_id}")
+
+    # 1. Wait for at least one table row to appear
+    try:
+        page.locator("table.el-table__body tr").first.wait_for(timeout=50000)
+    except PlaywrightTimeoutError:
+        raise Exception("No table rows found within timeout.")
+
+    # 2. Locate the specific row whose 4th cell matches account_id
+    row = page.locator(
+        f"//table[contains(@class,'el-table__body')]//tr[td[4]/div[contains(@class,'cell') and normalize-space(text())='{account_id.lower()}']]"
+    ).first
+
+    try:
+        row.wait_for(timeout=20000)
+    except PlaywrightTimeoutError:
+        raise Exception(f"No row matched Username: {account_id}")
+
+    # 3. Click the dropdown trigger in the first cell
+    trigger = row.locator("td:nth-child(1) span.el-dropdown-link")
+    try:
+        trigger.wait_for(timeout=5_000)
+        trigger.click()
+    except PlaywrightTimeoutError:
+        raise Exception(f"No dropdown trigger found for Username: {account_id}")
+
+    # 4. Click the “Recharge” item in the popped‐up menu
+    reset_item = page.locator(
+        "ul.el-dropdown-menu.el-popper li.el-dropdown-menu__item",
+        has_text="Reset Password"
+    ).first
+    try:
+        reset_item.wait_for(state="visible", timeout=5_000)
+        reset_item.click()
+    except PlaywrightTimeoutError:
+        raise Exception(f"Reset password menu item not found or not visible for Username: {account_id}")
+
+    logger.info(f"✅ Clicked 'Reset Password' from dropdown for Username: {account_id}")

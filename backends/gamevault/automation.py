@@ -12,11 +12,11 @@ from common.utils.handle_captcha import handle_captcha
 
 from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
-from backends.gamevault.utils.actions import click_recharge_for_account
+from backends.gamevault.utils.actions import click_recharge_for_account, click_reset_password_for_account
 from backends.gamevault.utils.actions import click_redeem_for_account
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
-    mark_redeem_request_status, get_backend_account, mark_bonus_transferred
+    mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -455,6 +455,61 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
         insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
 
+def _reset_password(page: Page, logger: logging.Logger, account_id, task_id):
+    logger.info(f"Initiating Pasword reset: account_id={account_id}")
+    _ = get_backend_account(account_id)
+    __, password = generate_credentials()
+
+    try:
+        announcement_box = page.locator("div.el-message-box.security-announcement-box")
+        announcement_box.wait_for(timeout=2000, state="visible")
+        announcement_box.locator("button:has-text('OK')").click()
+    except PlaywrightTimeoutError:
+        pass
+
+    page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
+    page.locator("button:has-text('search')").click()
+    logger.debug("Calling click_reset_password_for_account helper.")
+    click_reset_password_for_account(page, account_id, logger)
+
+    dlg = page.locator("div.el-dialog:visible",
+                       has=page.locator("span.el-dialog__title", has_text="Reset Password"))
+
+    dlg.locator("//label[text()='New password']/following-sibling::div//input") \
+        .fill(password)
+    dlg.locator("//label[text()='Confirm password']/following-sibling::div//input") \
+        .fill(password)
+
+    confirm_btn = dlg.locator(".el-dialog__footer button.el-button--primary", has_text="Confirm")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
+
+    page.wait_for_timeout(1000)
+    try:
+        messages = page.locator("p.el-message__content").all()
+        for msg in messages:
+            if msg.is_visible():
+                text = msg.inner_text().strip().lower()
+                if "success" in text:
+                    logger.info("Password reset successful.")
+                    insert_log("info", description=f"Password reset successful for account {account_id}",
+                               source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+                    update_automation_result(task_id=task_id, description="Password reset successful.", status="success",
+                                             data=json.dumps({"password": password}))
+                    update_password_by_username(username=account_id, new_password=password)
+                else:
+                    logger.warning(f"Password reset failed. Unhandled reset response: {text}")
+                    insert_log("error", description=f"Password reset failed. Unhandled reset response: {text}",
+                               source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
+                    update_automation_result(task_id=task_id,
+                                             description=f"Password reset failed. Unhandled reset response: {text}",
+                                             status="failed")
+    except PlaywrightTimeoutError:
+        logger.warning("Password reset failed. Failed to detect result after reset")
+        insert_log("error", description="Failed to detect reset response", source_url=str(page.url),
+                   backend_id=BACKEND_ID, account_id=_.id)
+        update_automation_result(task_id=task_id, description="Failed to detect reset response", status="failed")
+
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):
     backend = get_backend(BACKEND_NAME)
@@ -654,3 +709,44 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id)
 
+@with_persistent_browser
+def action_reset_password(page: Page, account_id: str, task_id, backend):
+    backend = get_backend(BACKEND_NAME)
+    _ = get_backend_account(account_id)
+
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("Reset-password action started: account_id=%s", account_id)
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
+            backend_id=backend.id, account_id=_.id
+        )
+        _login_and_navigate(page, logger, backend, task_id)
+        _reset_password(page, logger, account_id, task_id)
+    except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
+        logger.critical("Error during account password reset: %s", e, exc_info=True)
+        send_email(
+            subject="Account password reset failed",
+            body=f"Critical error occurred during reset password for {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
+        insert_log(
+            "error",
+            f"Error during account password reset: {e}",
+            source_url=str(page.url),
+            backend_id=backend.id,
+            account_id=_.id
+        )
+        update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
+    finally:
+        logger.info("Reset-password action completed.")
+        insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend.id, account_id=_.id)
