@@ -33,6 +33,14 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         if validate_session_token(page, logger):
             logger.info("Session injection and validation successful")
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+            try:
+                dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+                dialog.wait_for(state="visible", timeout=5000)
+                confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+                confirm_btn.click()
+            except PlaywrightTimeoutError:
+                pass
+
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return session
         else:
@@ -80,6 +88,13 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
+            try:
+                dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+                dialog.wait_for(state="visible", timeout=5000)
+                confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+                confirm_btn.click()
+            except PlaywrightTimeoutError:
+                pass
 
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
@@ -106,6 +121,13 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
         logger.info("Session from another task injected and validated.")
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+        try:
+            dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+            dialog.wait_for(state="visible", timeout=5000)
+            confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+            confirm_btn.click()
+        except PlaywrightTimeoutError:
+            pass
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
         logger.info("Session from another task injected and validated.")
         return session
