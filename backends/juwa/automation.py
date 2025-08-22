@@ -59,7 +59,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         login_btn.click()
 
         try:
-            dialog_el = page.locator("div.el-message-box")
+            dialog_el = page.locator("p.el-message__content")
             dialog_el.wait_for(timeout=5000, state="visible")
             text = dialog_el.inner_text().strip().lower()
             if "the verification code is incorrect" in text:
@@ -69,7 +69,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.reload(wait_until="domcontentloaded")
-            elif "the user name or password is incorrect" in text:
+            elif "the user name or password is incorrect" in text or "password error" in text or "invalid account name or credentials" in text:
 
                 logger.error("Incorrect login credentials.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}")
