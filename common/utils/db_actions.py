@@ -374,3 +374,26 @@ def finalize_status(t, status: bool, id_to_update=None):
     elif t == "reward_freeplay":
         if status:
             mark_spin_status(id_to_update, "success")
+
+
+def update_password_by_username(username: str, new_password: str):
+    db = SessionLocal()
+    try:
+        account = db.query(BackendAccount).filter(
+            BackendAccount.username == username,
+            BackendAccount.deleted_at == None
+        ).one_or_none()
+
+        if not account:
+            raise ValueError(f"No backend account found for username '{username}'")
+
+        account.password = new_password
+        db.commit()
+        db.refresh(account)
+        return account
+
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
