@@ -160,9 +160,10 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     main_frame.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
     page.wait_for_timeout(4000)
-
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
     # Click “Update” then “Recharge” via your helper
-    click_update_for_account(main_frame, account_id, logger)
+    click_update_for_account(frame, account_id, logger)
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount
@@ -223,8 +224,11 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
     page.wait_for_timeout(4000)
 
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+
     # Click “Update” then “Recharge” via your helper
-    click_update_for_account(main_frame, account_id, logger)
+    click_update_for_account(frame, account_id, logger)
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount

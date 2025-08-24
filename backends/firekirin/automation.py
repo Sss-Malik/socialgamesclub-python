@@ -326,6 +326,12 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     main = page.frame_locator(MAIN_IFRAME)
     main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main.locator(ACCOUNT_SEARCH_BUTTON).click()
+    page.wait_for_timeout(5000)
+
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+    click_update_for_account(frame, account_id, logger)
+
     table = main.locator("table#item")
     table.wait_for(timeout=20_000, state="visible")
 

@@ -34,12 +34,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     page.goto(login_url, wait_until="domcontentloaded")
 
     try:
-        if page.locator(MAIN_PAGE_EL).is_visible(timeout=5_000):
-            logger.info("Existing session detected; skipping login.")
-            page.frame_locator(LEFT_IFRAME).locator(USER_MANAGEMENT_XPATH).click(timeout=20_000)
-            return
+        page.locator(MAIN_PAGE_EL).wait_for(timeout=5000)
+        logger.info("Existing session detected; skipping login.")
+        page.frame_locator(LEFT_IFRAME).locator(USER_MANAGEMENT_XPATH).click(timeout=20_000)
+        return
     except PlaywrightTimeoutError:
-        logger.info("No existing session; proceeding with login.")
+        try:
+            dialog_el = page.locator("div#mb_con")
+            dialog_el.wait_for(timeout=5000, state="visible")
+            text = dialog_el.inner_text().strip().lower()
+            if "session timeout" in text:
+                logger.info("Session timeout dialog detected. resolving")
+                page.locator("input#mb_btn_ok").click()
+                page.wait_for_load_state("networkidle")
+        except PlaywrightTimeoutError:
+            logger.info("No existing session; proceeding with login.")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
@@ -160,8 +169,11 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
     page.wait_for_timeout(4000)
 
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+
     logger.debug("Calling click_update_for_account helper.")
-    click_update_for_account(main_frame, account_id, logger)
+    click_update_for_account(frame, account_id, logger)
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount
@@ -226,8 +238,11 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     main_frame.locator(ACCOUNT_SEARCH_BUTTON).click()
     page.wait_for_timeout(4000)
 
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+
     logger.debug("Calling click_update_for_account helper.")
-    click_update_for_account(main_frame, account_id, logger)
+    click_update_for_account(frame, account_id, logger)
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount
@@ -281,6 +296,13 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     main = page.frame_locator(MAIN_IFRAME)
     main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main.locator(ACCOUNT_SEARCH_BUTTON).click()
+    page.wait_for_timeout(5000)
+
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame = frame_el.content_frame()
+    logger.debug("Calling click_update_for_account helper.")
+    click_update_for_account(frame, account_id, logger)
+
     table = main.locator("table#item")
     table.wait_for(timeout=5000, state="visible")
 
