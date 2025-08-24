@@ -55,8 +55,22 @@ class Log(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    task_id = Column(
+        String(36),
+        ForeignKey("automation_results.task_id", ondelete="SET NULL", onupdate="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
     backend = relationship("BackendGame", back_populates="logs")
     backend_accounts = relationship("BackendAccount", back_populates="logs")
+
+    result = relationship(
+        "AutomationResult",
+        back_populates="logs",
+        foreign_keys=[task_id],
+        uselist=False,
+    )
 
 class User(Base):
     __tablename__ = "users"
@@ -153,6 +167,13 @@ class AutomationResult(Base):
         primaryjoin="AutomationResult.task_id==foreign(AutomationRequest.task_id)",
         cascade="all, delete-orphan",
         uselist=False,  # set to False if you GUARANTEE task_id is unique and want 1:1
+    )
+
+    logs = relationship(
+        "Log",
+        back_populates="result",
+        cascade="save-update",  # don't delete logs implicitly; keep history
+        passive_deletes=True,
     )
 
 class BackendSession(Base):
