@@ -1,7 +1,7 @@
 # api/main.py
 
 from __future__ import annotations
-
+from uuid import uuid4
 import asyncio
 from typing import Optional, Literal, Dict, Any
 
@@ -80,16 +80,13 @@ def _enqueue_action(
     Centralizes Celery scheduling + logging so each endpoint stays tiny.
     Preserves all side-effects and response shape.
     """
-    task = invoke_action.apply_async(
-        args=[backend_key, action],
-        kwargs=queue_kwargs,
-        queue=backend_key,
-    )
+
+    task_id = str(uuid4())
 
     backend = get_backend(backend_key)
 
     insert_automation_result(
-        task_id=task.id,
+        task_id=task_id,
         description=description,
         user_id=user_id,
         backend_id=backend.id,
@@ -97,9 +94,16 @@ def _enqueue_action(
     )
 
     insert_automation_request(
-        task_id=task.id,
+        task_id=task_id,
         request_type=request_type,
         payload={"action": action, **payload},
+    )
+
+    task = invoke_action.apply_async(
+        args=[backend_key, action],
+        kwargs=queue_kwargs,
+        queue=backend_key,
+        task_id=task_id
     )
 
     # Response shape must remain the same
