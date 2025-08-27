@@ -1,87 +1,75 @@
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-def click_recharge_for_account(main_frame, account_id: str, logger):
-    logger.debug(f"Searching for recharge button for Username: {account_id}")
+def click_account_action(
+    main_frame,
+    username: str,
+    action: str,                      # "recharge" | "withdraw" | "reset_password"
+    logger,
+    *,
+    first_paint_timeout: int = 50_000,
+    per_page_timeout: int = 6_000,
+    page_scan_limit: int = 200
+):
 
-    # wait for the table container to be visible
-    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=50_000)
+    logger.debug(f"Searching for '{action}' button for Username: {username}")
 
-    # locate the <tr> whose 4th <td> contains our account_id
-    row = main_frame.locator(
-        f"//div[contains(@class,'layui-table-box')]//table[contains(@class,'layui-table')]//tbody//tr[td[4]/div[contains(@class,'layui-table-cell') and normalize-space(text())='{account_id}']]"
-    ).first
+    # ---- ensure table is present/rendered ----
+    table_box = main_frame.locator("div.layui-table-box")
+    table_box.wait_for(state="visible", timeout=first_paint_timeout)
 
-    # ensure the row exists
+    main_body = main_frame.locator("div.layui-table-body.layui-table-main")
+    # Wait for any row or accept that table may be empty (we'll handle not found gracefully)
     try:
-        row.wait_for(timeout=5_000)
+        main_body.locator("tbody tr").first.wait_for(state="visible", timeout=per_page_timeout)
     except PlaywrightTimeoutError:
-        raise Exception(f"No table row found for account ID: {account_id}")
+        raise Exception("Timeout while waiting for table rows")
 
-    # find and click the "Recharge" button in the 11th cell
-    button = row.locator('td:nth-child(11) button', has_text="Recharge")
-    try:
-        button.wait_for(timeout=5_000)
-    except PlaywrightTimeoutError:
-        raise Exception(f"Recharge button not found in row for account ID: {account_id}")
+    # ---- page helpers ----
+    pager_root = main_frame.locator("div.layui-laypage")
 
-    button.click()
-    logger.debug(f"✅ Clicked recharge button for Username: {account_id}")
+    def find_row_on_current_page():
+        main_frame.wait_for_timeout(5000)
+        r = main_body.locator(
+            f"//tr[td[@data-field='Account']/div[normalize-space()='{username}']]"
+        ).first
+        return r if r.count() else None
 
+    def click_action_in_row(r):
+        # Button lives in Operation cell (data-field='10'), anchor has lay-event
+        btn = r.locator(f"td[data-field='10'] a[lay-event='{action}'] button")
+        btn.wait_for(state="visible", timeout=per_page_timeout)
+        r.scroll_into_view_if_needed()
+        btn.click()
+        logger.debug(f"✅ Clicked '{action}' for Username: {username}")
 
-def click_withdraw_for_account(main_frame, account_id: str, logger):
-    logger.debug(f"Searching for withdraw button for Username: {account_id}")
+    def go_to_next_page():
+        next_btn = pager_root.locator("a.layui-laypage-next:not(.layui-disabled)")
+        if not next_btn.count():
+            return False
+        next_btn.click()
+        try:
+            main_body.locator("tbody tr").first.wait_for(state="visible", timeout=per_page_timeout)
+        except PlaywrightTimeoutError:
+           raise Exception("Timeout while waiting for table rows")
+        return True
 
-    # wait for the table container to be visible
-    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=50_000)
+    # ---- search current page, then paginate ----
+    pages_checked = 0
+    while True:
+        pages_checked += 1
+        row = find_row_on_current_page()
+        if row:
+            if action == "read":
+                return row
+            click_action_in_row(row)
+            return None
 
-    # locate the <tr> whose 4th <td> contains our account_id
-    row = main_frame.locator(
-        f"//div[contains(@class,'layui-table-box')]//table[contains(@class,'layui-table')]//tbody//tr[td[4]/div[contains(@class,'layui-table-cell') and normalize-space(text())='{account_id}']]"
-    ).first
+        # If no pager, or we've hit a sensible limit, stop.
+        if not pager_root.count() or pages_checked >= page_scan_limit:
+            break
 
-    # ensure the row exists
-    try:
-        row.wait_for(timeout=5_000)
-    except PlaywrightTimeoutError:
-        raise Exception(f"No table row found for account ID: {account_id}")
+        # Try next page; if there's no next, we're done.
+        if not go_to_next_page():
+            break
 
-    # find and click the "Recharge" button in the 11th cell
-    button = row.locator('td:nth-child(11) button', has_text="Withdraw")
-    try:
-        button.wait_for(timeout=5_000)
-    except PlaywrightTimeoutError:
-        raise Exception(f"Withdraw button not found in row for account ID: {account_id}")
-
-    button.click()
-    logger.debug(f"✅ Clicked withdraw button for Username: {account_id}")
-
-
-
-def click_reset_password_for_account(main_frame, account_id: str, logger):
-    logger.debug(f"Searching for reset password button for Username: {account_id}")
-
-    # wait for the table container to be visible
-    main_frame.locator("div.layui-table-box").wait_for(state="visible", timeout=50_000)
-
-    # locate the <tr> whose 4th <td> contains our account_id
-    row = main_frame.locator(
-        f"//div[contains(@class,'layui-table-box')]//table[contains(@class,'layui-table')]//tbody//tr[td[4]/div[contains(@class,'layui-table-cell') and normalize-space(text())='{account_id}']]"
-    ).first
-
-    # ensure the row exists
-    try:
-        row.wait_for(timeout=5_000)
-    except PlaywrightTimeoutError:
-        raise Exception(f"No table row found for account ID: {account_id}")
-
-    # find and click the "Recharge" button in the 11th cell
-    button = row.locator('td:nth-child(11) button', has_text="Reset password")
-    try:
-        button.wait_for(timeout=5_000)
-    except PlaywrightTimeoutError:
-        raise Exception(f"Reset password button not found in row for account ID: {account_id}")
-
-    button.click()
-    logger.debug(f"✅ Clicked reset password button for Username: {account_id}")
-
-
+    raise Exception(f"Username '{username}' not found for action '{action}' after scanning {pages_checked} page(s).")

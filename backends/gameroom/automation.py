@@ -4,8 +4,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 
 from backends.gameroom.config import *
 from backends.gameroom.utils.credentials import generate_credentials
-from backends.gameroom.utils.actions import click_recharge_for_account, click_reset_password_for_account
-from backends.gameroom.utils.actions import click_withdraw_for_account
+from backends.gameroom.utils.actions import click_account_action
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
 import random
@@ -230,7 +229,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
     logger.debug("Calling click_withdraw_for_account helper.")
-    click_withdraw_for_account(frame_obj, account_id, logger)
+    click_account_action(frame_obj, account_id, "withdraw", logger)
 
     page.wait_for_timeout(1000)
 
@@ -280,16 +279,10 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     main_iframe.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     main_iframe.locator("button:has-text('Search')").click()
 
-    table = main_iframe.locator("div.layui-table-body.layui-table-main table.layui-table")
-    table.wait_for(timeout=50000, state="visible")
+    frame_el = page.locator(MAIN_IFRAME).element_handle()
+    frame_obj = frame_el.content_frame()
+    row = click_account_action(frame_obj, account_id, "read", logger)
 
-    row = main_iframe.locator(
-        "div.layui-table-body.layui-table-main table.layui-table > tbody > tr"
-    ).filter(
-        has=main_iframe.locator(f"td[data-field='Account'] >> text='{account_id}'")
-    ).first
-
-    row.wait_for(timeout=50000)
     logger.debug("Account row located in table.")
     backend_account_id = row.locator("td[data-field='Id']").inner_text().strip()
     data = {
@@ -320,7 +313,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     # call your existing helper (which still expects a Frame object)
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
-    click_recharge_for_account(frame_obj, account_id, logger)
+    click_account_action(frame_obj, account_id, "recharge", logger)
 
     # fill & submit recharge form
     recharge_iframe = main_iframe.frame_locator('iframe[src*="recharge"]')
@@ -381,7 +374,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     # call your existing helper (which still expects a Frame object)
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
-    click_recharge_for_account(frame_obj, account_id, logger)
+    click_account_action(frame_obj, account_id, "recharge", logger)
 
     # fill & submit recharge form
     recharge_iframe = main_iframe.frame_locator('iframe[src*="recharge"]')
@@ -440,7 +433,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
     logger.debug("Calling click_reset_password_for_account helper.")
-    click_reset_password_for_account(frame_obj, account_id, logger)
+    click_account_action(frame_obj, account_id, "reset_password", logger)
 
     reset_iframe = main_iframe.frame_locator('iframe[src*="resetpw"]')
     reset_iframe.get_by_placeholder("Please enter Login password").fill(password)
