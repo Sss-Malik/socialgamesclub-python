@@ -5,8 +5,7 @@ import re
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from backends.juwa.config import *
-from backends.juwa.utils.actions import click_recharge_for_account, click_reset_password_for_account
-from backends.juwa.utils.actions import click_redeem_for_account
+from backends.juwa.utils.actions import click_account_action
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
 
@@ -159,7 +158,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_recharge_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "recharge")
     page.wait_for_timeout(2_000)
 
     recharge_inp = page.locator(
@@ -229,7 +228,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_recharge_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "recharge")
     page.wait_for_timeout(2_000)
 
     recharge_inp = page.locator(
@@ -293,13 +292,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    row = page.locator(
-        "table.el-table__body tbody tr"
-    ).filter(
-        has=page.locator(f"td:nth-child(4) .cell:text('{account_id}')")
-    ).first
-
-    row.wait_for(timeout=5000)
+    row = click_account_action(page, account_id, logger, "read")
     logger.debug("Account row located in table.")
     backend_account_id = row.locator("td:nth-child(3) .cell").inner_text().strip()
     data = {
@@ -323,7 +316,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_redeem_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "withdraw")
     dlg = page.locator(
         "div.el-dialog",
         has=page.locator("span.el-dialog__title", has_text="Please confirm your redeem & details!")
@@ -386,7 +379,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_reset_password_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "reset_password")
 
     dlg = page.locator(
         "div.el-dialog:visible",

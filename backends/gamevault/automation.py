@@ -12,7 +12,7 @@ from common.utils.handle_captcha import handle_captcha
 
 from backends.gamevault.config import *
 from backends.gamevault.utils.credentials import generate_credentials
-from backends.gamevault.utils.actions import click_recharge_for_account, click_reset_password_for_account
+from backends.gamevault.utils.actions import click_recharge_for_account, click_account_action
 from backends.gamevault.utils.actions import click_redeem_for_account
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
@@ -188,13 +188,8 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    row = page.locator(
-        "table.el-table__body tbody tr"
-    ).filter(
-        has=page.locator(f"td .cell:text('{account_id}')")
-    ).first
+    row = click_account_action(page, account_id, logger, "read")
 
-    row.wait_for(timeout=20000)
     logger.debug("Account row located in table.")
     backend_account_id = row.locator("td:nth-child(2) .cell").inner_text().strip()
     data = {
@@ -225,7 +220,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_recharge_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "recharge")
 
     # fill amount
     page.locator("//label[text()='Recharge Amount']/following-sibling::div//input")\
@@ -328,7 +323,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
 
-    click_recharge_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "recharge")
 
     # fill amount
     page.locator("//label[text()='Recharge Amount']/following-sibling::div//input")\
@@ -404,7 +399,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
     logger.debug("Calling click_redeem_for_account helper.")
-    click_redeem_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "withdraw")
 
     # confirm dialog
     dlg = page.locator("div.el-dialog",
@@ -471,7 +466,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id, task_id):
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
     logger.debug("Calling click_reset_password_for_account helper.")
-    click_reset_password_for_account(page, account_id, logger)
+    click_account_action(page, account_id, logger, "reset_password")
 
     dlg = page.locator("div.el-dialog:visible",
                        has=page.locator("span.el-dialog__title", has_text="Reset Password"))
