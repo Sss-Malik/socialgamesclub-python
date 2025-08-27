@@ -122,14 +122,14 @@ def click_account_action(page: Page, account_id: str, logger, action: str):
             if action == "read":
                 return row
 
-            trigger = row.locator("td:nth-child(1) span.el-dropdown-link")
+            trigger = row.locator("td:nth-child(1) button span", has_text="editor")
             trigger.wait_for(timeout=5_000)
             trigger.click()
 
             action_item = page.locator(
-                "ul.el-dropdown-menu.el-popper li.el-dropdown-menu__item",
+                "button",
                 has_text=button_text
-            ).first
+            )
             action_item.wait_for(state="visible", timeout=5_000)
             action_item.click()
 
