@@ -354,6 +354,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
             logger.exception("No dialog appeared after setting score.")
             insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}.")
+        break
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
