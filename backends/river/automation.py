@@ -5,7 +5,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 import random
 from backends.river.config import *
 from backends.river.utils.credentials import generate_credentials
-from backends.river.utils.actions import click_purchase_for_account
+from backends.river.utils.actions import click_purchase_for_account, click_delete_password_for_account
 from backends.river.utils.actions import click_redeem_for_account
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
@@ -283,6 +283,50 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     update_automation_result(task_id=task_id, status="success", data=json.dumps(data), description="Account information.")
 
 
+def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id):
+    logger.info(f"Initiating password reset: account_id={account_id}")
+    _ = get_backend_account(account_id)
+
+    acc_sr = page.locator(ACCOUNT_SEARCH_INPUT)
+    acc_sr.wait_for(timeout=15_000)
+    acc_sr.fill(account_id)
+    page.locator('button:has-text("Search")').click()
+    click_delete_password_for_account(page, account_id, logger)
+    try:
+        alert = page.wait_for_selector(
+            "div.alert.alert-error, div.alert.alert-success",
+            timeout=15_000,
+            state="visible"
+        )
+
+        text = alert.inner_text().strip().lower()
+
+        # 3) Branch on which one it is
+        if alert.get_attribute("class").split().count("alert-error"):
+            if "no password" in text:
+                logger.error("Reset failed: account has no password.")
+                insert_log("error", description="Account has no password", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+                update_automation_result(task_id=task_id, status="failed", description=f"Account has no password.")
+                return
+        elif alert.get_attribute("class").split().count("alert-success"):
+            if "password removed" in text:
+                logger.info("Reset successful.")
+                insert_log("info", f"Password reset successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+                update_automation_result(task_id=task_id, status="success", description="Reset password successful.")
+            else:
+                logger.warning(f"Unexpected reset password response: {text}")
+                update_automation_result(task_id=task_id, status="failed", description=f"Unexpected reset password response on {BACKEND_NAME}")
+                insert_log("warning", f"Unexpected reset password response: {text}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        else:
+            logger.warning("Matched an alert, but unknown type: %s", text)
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected alert detected on {BACKEND_NAME}")
+            insert_log("warning", f"Unexpected alert detected on {BACKEND_NAME}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+
+    except PlaywrightTimeoutError:
+        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after reset password on {BACKEND_NAME}.")
+        insert_log("warning", f"Failed to detect dialog after reset password for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+
+
 def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
     _ = get_backend_account(account_id)
@@ -556,3 +600,49 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
     finally:
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+
+
+
+
+
+@with_persistent_browser
+def action_reset_password(page: Page, account_id: str, task_id, backend):
+    backend = get_backend(BACKEND_NAME)
+    _ = get_backend_account(account_id)
+
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("Reset-password action started: account_id=%s", account_id)
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
+            backend_id=backend.id, account_id=_.id, task_id=task_id
+        )
+        _login_and_navigate(page, logger, backend, task_id)
+        _reset_password(page, logger, account_id, task_id)
+    except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            account_id=account_id,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
+        logger.critical("Error during account password reset: %s", e, exc_info=True)
+        send_email(
+            subject="Account password reset failed",
+            body=f"Critical error occurred during reset password for {account_id} on backend '{BACKEND_NAME}'. Please review",
+        )
+        insert_log(
+            "error",
+            f"Error during account password reset: {e}",
+            source_url=str(page.url),
+            backend_id=backend.id,
+            account_id=_.id, task_id=task_id
+        )
+        update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
+    finally:
+        logger.info("Reset-password action completed.")
+        insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend.id, account_id=_.id, task_id=task_id)
