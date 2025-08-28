@@ -7,7 +7,7 @@ def click_account_action(
     logger,
     *,
     first_paint_timeout: int = 50_000,
-    per_page_timeout: int = 6_000,
+    per_page_timeout: int = 20000,
     page_scan_limit: int = 200
 ):
 

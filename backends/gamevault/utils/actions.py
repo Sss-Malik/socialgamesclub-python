@@ -85,7 +85,7 @@ def click_redeem_for_account(page: Page, account_id: str, logger):
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
 
-def click_account_action(page: Page, account_id: str, logger, action: str):
+def click_account_action(page: Page, account_id: str, logger, action: str, timeout: int = 15000):
     logger.debug(f"🔍 Starting pagination scan to locate account: {account_id}")
 
     action_map = {
@@ -116,21 +116,21 @@ def click_account_action(page: Page, account_id: str, logger, action: str):
         row = page.locator(row_xpath).first
 
         try:
-            row.wait_for(timeout=20_000)
+            row.wait_for(timeout=timeout)
             logger.debug(f"✅ Found row for account: {account_id}")
 
             if action == "read":
                 return row
 
             trigger = row.locator("td:nth-child(1) button span", has_text="editor")
-            trigger.wait_for(timeout=5_000)
+            trigger.wait_for(timeout=timeout)
             trigger.click()
 
             action_item = page.locator(
                 "button",
                 has_text=button_text
             )
-            action_item.wait_for(state="visible", timeout=5_000)
+            action_item.wait_for(state="visible", timeout=timeout)
             action_item.click()
 
             logger.debug(f"✅ Clicked '{button_text}' for Username: {account_id}")
