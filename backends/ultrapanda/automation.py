@@ -800,13 +800,17 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Reset-password action started: account_id=%s", account_id)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
             backend_id=backend.id, account_id=_.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
         _reset_password(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -830,5 +834,7 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
         )
         update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Reset-password action completed.")
         insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend.id, account_id=_.id, task_id=task_id)
