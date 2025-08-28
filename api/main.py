@@ -197,7 +197,6 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
-    _: bool = Depends(require_app_key),
 ):
     return _enqueue_action(
         backend_key=req.backend,
