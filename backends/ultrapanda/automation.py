@@ -693,7 +693,8 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
-        decrement_active_tasks_count(session.id)
+        if session:
+            decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
 
