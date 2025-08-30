@@ -13,23 +13,18 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Pre-copy for layer cache
+# Pre-install Python dependencies (for caching)
 COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && playwright install-deps \
-    && playwright install \
-    && rm -rf /root/.cache/pip
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    playwright install-deps && \
+    playwright install && \
+    rm -rf /root/.cache/pip
 
-
-# Install Playwright *as the correct user*
-RUN playwright install
-
-# Copy source code
+# Copy the application code last (so code changes don't invalidate dependency cache)
 COPY . .
 
 EXPOSE 8000
-
 ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "api.main:app", \
