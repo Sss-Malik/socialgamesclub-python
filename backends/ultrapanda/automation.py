@@ -96,7 +96,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
                 input_box.fill(code)
 
-                ok_button = page.locator("button:has-text('OK')")
+                ok_button = auth_dialog.locator("button:has-text('OK')")
                 ok_button.click()
             except PlaywrightTimeoutError:
                 pass
