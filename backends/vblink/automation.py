@@ -10,6 +10,7 @@ from common.utils.emails import send_email
 import random
 from common.utils.logger import get_backend_logger
 from common.utils.ensure_directories import ensure_directories
+from common.utils.otp import generate_2fa_code
 from common.utils.poll_utils import wait_for_valid_session, wait_for_active_tasks_to_zero
 from common.utils.save_credentials import save_credentials
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_order_automation_status, \
@@ -91,6 +92,22 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                     logger.info(f"Unknown dialog message: {text}")
             except PlaywrightTimeoutError:
                 logger.info("Login likely successful (no error dialog detected).")
+
+
+            try:
+                auth_dialog = page.locator("div[role='dialog'] .dialog-title:text('Verify your identity')")
+                auth_dialog.wait_for(state="visible", timeout=5000)
+                logger.info("2FA detected. Solving")
+                input_box = page.locator("input[placeholder='Verification code']")
+
+                code = generate_2fa_code(secret_key=backend.binding_key)
+
+                input_box.fill(code)
+
+                ok_button = page.locator("button:has-text('OK')")
+                ok_button.click()
+            except PlaywrightTimeoutError:
+                pass
 
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
