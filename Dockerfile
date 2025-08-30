@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.54.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.52.0-noble
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
