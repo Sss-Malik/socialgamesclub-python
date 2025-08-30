@@ -13,6 +13,7 @@ class BackendGame(Base):
     username = Column(String(255))
     password = Column(String(255))
     game_url = Column(String(255))
+    binding_key = Column(String(32), nullable=True)
     image_url = Column(String(255))
     accounts_creation_pd = Column(String(255))
     created_at = Column(DateTime, default=func.now())
