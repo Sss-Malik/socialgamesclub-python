@@ -93,19 +93,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             except PlaywrightTimeoutError:
                 logger.info("Login likely successful (no error dialog detected).")
 
-
             try:
-                auth_dialog = page.locator("div[role='dialog'] .dialog-title:text('Verify your identity')")
+                auth_dialog = page.locator("div[role='dialog']", has_text="Verify your identity")
                 auth_dialog.wait_for(state="visible", timeout=5000)
                 logger.info("2FA detected. Solving")
-                input_box = page.locator("input[placeholder='Verification code']")
 
+                input_box = auth_dialog.locator("input[placeholder='Verification code']")
                 code = generate_2fa_code(secret_key=backend.binding_key)
 
                 input_box.fill(code)
+                page.wait_for_timeout(500)  # small delay
 
                 ok_button = auth_dialog.locator("button:has-text('OK')")
+                ok_button.wait_for(state="visible", timeout=5000)
                 ok_button.click()
+                logger.debug("google auth OK button clicker")
             except PlaywrightTimeoutError:
                 pass
 
