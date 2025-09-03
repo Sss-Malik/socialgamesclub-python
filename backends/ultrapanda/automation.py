@@ -35,9 +35,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.info("Session injection and validation successful")
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             try:
-                dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-                confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+
+                confirm_btn = dialog.locator("button:has-text('confirm')").first
                 confirm_btn.click()
             except PlaywrightTimeoutError:
                 pass
@@ -108,9 +109,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
             try:
-                dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-                confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+
+                confirm_btn = dialog.locator("button:has-text('confirm')").first
                 confirm_btn.click()
             except PlaywrightTimeoutError:
                 pass
@@ -141,9 +143,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         logger.info("Session from another task injected and validated.")
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
         try:
-            dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+            dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
             dialog.wait_for(state="visible", timeout=5000)
-            confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+
+            confirm_btn = dialog.locator("button:has-text('confirm')").first
             confirm_btn.click()
         except PlaywrightTimeoutError:
             pass
