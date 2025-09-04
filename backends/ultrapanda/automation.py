@@ -37,13 +37,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             try:
                 dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-                text = dialog.inner_text.strip().lower()
-                logger.info(f"dialog appeared. Text: {text}")
+                text = dialog.inner_text(timeout=2000).strip().lower()
+                logger.info(f"Dialog appeared. Text: {text}")
                 confirm_btn = dialog.locator("button:has-text('confirm')").first
-                confirm_btn.click()
-                logger.info("dialog resolved")
+                if confirm_btn.is_visible(timeout=2000):
+                    confirm_btn.click()
+                    logger.info("Dialog resolved by clicking confirm")
+                else:
+                    logger.warning("Dialog appeared but no confirm button found")
             except PlaywrightTimeoutError:
-                pass
+                logger.debug("No dialog appeared within the timeout")
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return session
@@ -113,13 +116,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             try:
                 dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-                text = dialog.inner_text.strip().lower()
-                logger.info(f"dialog appeared. Text: {text}")
+                text = dialog.inner_text(timeout=2000).strip().lower()
+                logger.info(f"Dialog appeared. Text: {text}")
                 confirm_btn = dialog.locator("button:has-text('confirm')").first
-                confirm_btn.click()
-                logger.info("dialog resolved")
+                if confirm_btn.is_visible(timeout=2000):
+                    confirm_btn.click()
+                    logger.info("Dialog resolved by clicking confirm")
+                else:
+                    logger.warning("Dialog appeared but no confirm button found")
             except PlaywrightTimeoutError:
-                pass
+                logger.debug("No dialog appeared within the timeout")
 
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
@@ -149,13 +155,17 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         try:
             dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
             dialog.wait_for(state="visible", timeout=5000)
-            text = dialog.inner_text.strip().lower()
-            logger.info(f"dialog appeared. Text: {text}")
+            text = dialog.inner_text(timeout=2000).strip().lower()
+            logger.info(f"Dialog appeared. Text: {text}")
             confirm_btn = dialog.locator("button:has-text('confirm')").first
-            confirm_btn.click()
-            logger.info("dialog resolved")
+            if confirm_btn.is_visible(timeout=2000):
+                confirm_btn.click()
+                logger.info("Dialog resolved by clicking confirm")
+            else:
+                logger.warning("Dialog appeared but no confirm button found")
         except PlaywrightTimeoutError:
-            pass
+            logger.debug("No dialog appeared within the timeout")
+
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
         logger.info("Session from another task injected and validated.")
         return session
