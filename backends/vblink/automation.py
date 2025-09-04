@@ -42,9 +42,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             try:
                 dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-
+                text = dialog.inner_text.strip().lower()
+                logger.info(f"dialog appeared. Text: {text}")
                 confirm_btn = dialog.locator("button:has-text('confirm')").first
                 confirm_btn.click()
+                logger.info("dialog resolved")
             except PlaywrightTimeoutError:
                 pass
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
@@ -117,9 +119,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             try:
                 dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
-
+                text = dialog.inner_text.strip().lower()
+                logger.info(f"dialog appeared. Text: {text}")
                 confirm_btn = dialog.locator("button:has-text('confirm')").first
                 confirm_btn.click()
+                logger.info("dialog resolved")
             except PlaywrightTimeoutError:
                 pass
 
@@ -150,10 +154,13 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         logger.info("Session from another task injected and validated.")
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
         try:
-            dialog = page.locator("div[role='dialog'] >> text=Dear Customers,")
+            dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
             dialog.wait_for(state="visible", timeout=5000)
-            confirm_btn = page.locator("div[role='dialog'] button:has-text('confirm')")
+            text = dialog.inner_text.strip().lower()
+            logger.info(f"dialog appeared. Text: {text}")
+            confirm_btn = dialog.locator("button:has-text('confirm')").first
             confirm_btn.click()
+            logger.info("dialog resolved")
         except PlaywrightTimeoutError:
             pass
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
