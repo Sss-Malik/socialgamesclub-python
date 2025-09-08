@@ -1,6 +1,6 @@
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
@@ -392,6 +392,50 @@ def update_password_by_username(username: str, new_password: str):
         db.refresh(account)
         return account
 
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+
+def get_pat(token):
+    db = SessionLocal()
+    try:
+        pat = db.query(PersonalAccessToken).filter_by(token=token).first()
+        if pat:
+            return pat
+        return None
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+def get_pat_user(tokenable_id):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == tokenable_id).first()
+        if user:
+            return user
+        return None
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+
+def get_validated_backend_account(account_id, user_id):
+    db = SessionLocal()
+    try:
+        backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
+            BackendAccount.username == account_id,
+            BackendAccount.user_id == user_id
+        ).first()
+        if backend_account:
+            return backend_account
+        return None
     except Exception as e:
         db.rollback()
         raise e

@@ -269,3 +269,17 @@ class AutomationRequest(Base):
         back_populates="requests",
         primaryjoin="foreign(AutomationRequest.task_id)==AutomationResult.task_id",
     )
+
+class PersonalAccessToken(Base):
+    __tablename__ = "personal_access_tokens"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tokenable_type = Column(String(255), nullable=False)
+    tokenable_id = Column(BigInteger, nullable=False)
+    name = Column(String(255), nullable=False)
+    token = Column(String(64), unique=True, nullable=False)  # hashed token
+    abilities = Column(Text, nullable=True)
+    last_used_at = Column(TIMESTAMP, nullable=True)
+    expires_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=True)
