@@ -433,7 +433,7 @@ def get_validated_backend_account(account_id, user_id):
             BackendAccount.username == account_id,
             BackendAccount.user_id == user_id
         ).first()
-        if backend_account:
+        if backend_account and backend_account.user:
             return backend_account
         return None
     except Exception as e:

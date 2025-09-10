@@ -171,7 +171,15 @@ async def create_account(
 async def recharge_account(
     req: RechargeAccountRequest,
     x_order_id: Optional[str] = Header(None),
+    current_user: User = Depends(require_user_token),
 ):
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
+
     if not x_order_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing order header")
 
@@ -231,6 +239,7 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
+    _: bool = Depends(require_app_key)
 ):
     return _enqueue_action(
         backend_key=req.backend,
@@ -269,10 +278,14 @@ async def read_account(
 @app.post("/automation/freeplay")
 async def recharge_freeplay(
     req: RechargeFreeplayRequest,
+    current_user: User = Depends(require_user_token)
 ):
-    backend_account = get_backend_account(req.account_id)
-    if not backend_account or not backend_account.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
 
     user = backend_account.user
     t = req.type
@@ -330,8 +343,6 @@ async def reset_password(
             detail="Account does not belong to user"
         )
 
-    if not backend_account.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
 
     return _enqueue_action(
         backend_key=req.backend,
