@@ -4,9 +4,10 @@ from __future__ import annotations
 from uuid import uuid4
 import asyncio
 from typing import Optional, Literal, Dict, Any
-
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, status, Header, Request, Depends
 
+from models import User
 from .schemas import (
     CreateAccountRequest,
     RechargeAccountRequest,
@@ -25,6 +26,7 @@ from common.utils.db_actions import (
     get_spin,
     get_automation_result,
     insert_automation_request,
+    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance
 )
 
 # ---- App setup ----
@@ -61,9 +63,41 @@ def _check_app_key(x_app_key: Optional[str]) -> None:
             detail="Invalid APP_KEY",
         )
 
+def _check_user_token(token: Optional[str]) -> User:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token"
+        )
+
+    pat = get_pat(token)
+    if not pat:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    if pat.expires_at and pat.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired"
+        )
+
+    user = get_pat_user(tokenable_id=pat.tokenable_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    return user
+
 def require_app_key(x_app_key: Optional[str] = Header(None)) -> bool:
     _check_app_key(x_app_key)
     return True
+
+def require_user_token(token: Optional[str] = Header(None)) -> User:
+    return _check_user_token(token)
+
 
 def _enqueue_action(
     *,
@@ -137,39 +171,36 @@ async def create_account(
 async def recharge_account(
     req: RechargeAccountRequest,
     x_order_id: Optional[str] = Header(None),
+    current_user: User = Depends(require_user_token),
 ):
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
+
+    if current_user.balance_minor < req.count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Insufficient wallet balance"
+        )
     if not x_order_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing order header")
 
     order = get_order(x_order_id)
-
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
-    if not order.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User not found")
-
-    if order.status != "finished":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Order not finished")
-
-    if order.automation_status == "finished":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already processed")
-
-    automation_result = get_automation_result(x_order_id)
-    if automation_result and automation_result.status == "pending":
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Task for this order id is already running",
-        )
-
+    deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.amount_to_deduct)
     return _enqueue_action(
         backend_key=req.backend,
         action="recharge-account",
         description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id},
+        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct},
         request_type="recharge",
         payload=req.dict(),
-        user_id=order.user.id,
+        user_id=current_user.id,
         order_id=x_order_id,
     )
 
@@ -197,7 +228,31 @@ async def withdraw_account(
 @app.post("/automation/read-account")
 async def read_account(
     req: ReadAccountRequest,
+    _: bool = Depends(require_app_key)
 ):
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="read-account",
+        description="Initiate account read",
+        queue_kwargs={"account_id": req.account_id},
+        request_type="read",
+        payload=req.dict(),
+        user_id=None,
+    )
+
+@app.post("/automation/read-account-user")
+async def read_account(
+    req: ReadAccountRequest,
+    current_user: User = Depends(require_user_token)
+):
+
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
+
     return _enqueue_action(
         backend_key=req.backend,
         action="read-account",
@@ -212,10 +267,14 @@ async def read_account(
 @app.post("/automation/freeplay")
 async def recharge_freeplay(
     req: RechargeFreeplayRequest,
+    current_user: User = Depends(require_user_token)
 ):
-    backend_account = get_backend_account(req.account_id)
-    if not backend_account or not backend_account.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
 
     user = backend_account.user
     t = req.type
@@ -262,10 +321,17 @@ async def recharge_freeplay(
     )
 
 @app.post("/automation/reset-password")
-async def reset_password(req: ResetPasswordRequest):
-    backend_account = get_backend_account(req.account_id)
-    if not backend_account or not backend_account.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account not found")
+async def reset_password(
+    req: ResetPasswordRequest,
+    current_user: User = Depends(require_user_token)
+):
+    backend_account = get_validated_backend_account(req.account_id, current_user.id)
+    if not backend_account:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account does not belong to user"
+        )
+
 
     return _enqueue_action(
         backend_key=req.backend,

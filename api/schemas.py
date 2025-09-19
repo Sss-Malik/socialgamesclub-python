@@ -6,6 +6,7 @@ class CreateAccountRequest(BaseModel):
 class RechargeAccountRequest(BaseModel):
     backend: str    = Field(..., example="juwa")
     count: int      = Field(1, example=50)
+    amount_to_deduct: int      = Field(1, example=50)
     account_id: str = Field(..., example="abc123")
 
 class WithdrawAccountRequest(BaseModel):

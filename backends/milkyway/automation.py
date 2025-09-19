@@ -15,7 +15,8 @@ from common.utils.logger import get_backend_logger
 from common.utils.handle_captcha import handle_captcha
 from common.utils.db_actions import get_backend, insert_backend_account, insert_log, update_game_id_by_username, \
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
-    mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username
+    mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
+    restore_wallet_balance, update_order_status, update_wallet_detail_status
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -160,7 +161,7 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
             break
 
 
-def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id):
+def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id, wallet_id, amount_to_deduct):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
     _ = get_backend_account(account_id)
 
@@ -197,14 +198,19 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_order_automation_status(order_id, "finished")
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-
+            update_order_status(order_id, "finished")
+            update_wallet_detail_status(order_id, "finished")
             if _.user.bonus_received:
                 mark_bonus_transferred(account_id)
 
         elif "insufficient" in text:
+            restore_wallet_balance(wallet_id, amount_to_deduct)
+            logger.info("Wallet balance restored")
             logger.error("Recharge failed: backend balance insufficient.")
+            update_order_status(order_id, "failed")
+            update_wallet_detail_status(order_id, "failed")
             update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
-            insert_log("warning", "Backend balance insufficient", source_url=str(page.url),
+            insert_log("warning", "Backend balance insufficient - Wallet balance restored", source_url=str(page.url),
                        backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_order_automation_status(order_id, "failed")
             send_email(
@@ -213,18 +219,30 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             )
             return
         elif "unknown" in text:
+            restore_wallet_balance(wallet_id, amount_to_deduct)
+            logger.info("Wallet balance restored")
             logger.warning("Unknown error.")
+            update_order_status(order_id, "failed")
+            update_wallet_detail_status(order_id, "failed")
             update_automation_result(task_id=task_id, status="failed", description="Unknown error.")
-            insert_log("warning", f"Unknown error for recharge: {account_id} ", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_order_automation_status(order_id, "failed")
+            insert_log("warning", f"Unknown error for recharge: {account_id} - Wallet balance restored", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
         else:
+            restore_wallet_balance(wallet_id, amount_to_deduct)
+            logger.info("Wallet balance restored")
             logger.warning(f"Unexpected recharge response: {text}")
-            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
-            insert_log("warning", f"Unexpected recharge response: {result}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+            update_order_status(order_id, "failed")
+            update_wallet_detail_status(order_id, "failed")
             update_order_automation_status(order_id, "failed")
+            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+            insert_log("warning", f"Unexpected recharge response: {result} - Wallet balance restored", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
     except PlaywrightTimeoutError:
+        restore_wallet_balance(wallet_id, amount_to_deduct)
+        logger.info("Wallet balance restored")
+        update_order_status(order_id, "failed")
+        update_wallet_detail_status(order_id, "failed")
         update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
-        insert_log("warning", f"Failed to detect result after recharge on {BACKEND_NAME}", source_url=str(page.url),
+        insert_log("warning", f"Failed to detect result after recharge on {BACKEND_NAME} - Wallet balance restored", source_url=str(page.url),
                    backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
         update_order_automation_status(order_id, "failed")
 
@@ -480,7 +498,7 @@ def action_create_account(page: Page, task_id, backend):
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
 
 @with_persistent_browser
-def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend):
+def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend, wallet_id, amount_to_deduct):
     backend = get_backend(BACKEND_NAME)
     _ = get_backend_account(account_id)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -494,8 +512,11 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
         )
         _login_and_navigate(page, logger, backend, task_id)
-        _recharge_account(page, logger, count, account_id, order_id, task_id)
+        _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct)
     except (PlaywrightTimeoutError, Exception) as e:
+        restore_wallet_balance(wallet_id, amount_to_deduct)
+        insert_log("info", "Critical error during account recharge - Wallet balance restored", source_url=str(page.url),
+                   backend_id=backend.id, account_id=_.id, task_id=task_id)
         screenshot_url = capture_and_upload_screenshot(
             page=page,
             backend=backend.name,
