@@ -97,6 +97,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             break
 
     logger.info("Login successful, navigating to user management page.")
+
+    try:
+        alert = page.locator("div#customAlert")
+        alert.wait_for(timeout=5000, state="visible")
+        close_btn = alert.locator("button#cancelBtn")
+        close_btn.click()
+    except PlaywrightTimeoutError:
+        pass
+
+
     page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
     page.frame_locator(LEFT_IFRAME).locator(USER_MANAGEMENT_XPATH).click(timeout=10_000)
     logger.info("Login and navigation successful.")
