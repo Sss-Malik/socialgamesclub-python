@@ -3,6 +3,8 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey,
 from sqlalchemy.orm import relationship
 from db import Base
 from datetime import datetime
+import enum
+from sqlalchemy.dialects.mysql import LONGTEXT
 
 class BackendGame(Base):
     __tablename__ = "backend_games"
@@ -303,3 +305,35 @@ class WalletMaster(Base):
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=True)
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=True)
     user = relationship("User", back_populates="wallet_master", uselist=False)
+
+
+class WalletDetail(Base):
+    __tablename__ = "wallet_detail"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    wallet_id = Column(BigInteger, ForeignKey("wallet_master.id"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    order_id = Column(String(255), nullable=True)
+    amount_minor = Column(DECIMAL(10, 6), nullable=True)
+    pay_price = Column(DECIMAL(10, 6), nullable=True)
+    actually_paid = Column(DECIMAL(10, 6), nullable=True)
+    outcome_price = Column(DECIMAL(10, 6), nullable=True)
+    type = Column(
+        Enum("DEPOSIT", "LOAD_TO_GAME", name="transaction_type"),
+        nullable=False
+    )
+    method = Column(String(24), nullable=True)
+    provider = Column(String(32), nullable=True)
+    provider_payment_id = Column(String(64), nullable=True)
+    game_id = Column(BigInteger, nullable=True)
+    ref_id = Column(String(64), nullable=True)
+    currency = Column(CHAR(3), nullable=True)
+    balance_after_minor = Column(DECIMAL(10, 6), nullable=True)
+    metadata_json = Column("metadata", LONGTEXT(collation="utf8mb4_bin"), nullable=True)
+    status = Column(String(255), nullable=False, default="pending")
+    description = Column(Text, nullable=True)
+    invoice_url = Column(String(255), nullable=True)
+    reject_reason = Column(String(255), nullable=True)
+    screenshot = Column(String(255), nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=True)

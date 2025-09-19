@@ -1,6 +1,6 @@
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
@@ -57,10 +57,33 @@ def update_order_automation_status(order_id: str, new_status: str):
         if not order:
             return None
         order.automation_status = new_status
-        if new_status == "failed":
-            order.status = "pending"
         db.commit()
         return order
+    finally:
+        db.close()
+
+def update_order_status(order_id: str, new_status: str):
+    db = SessionLocal()
+    try:
+        order = db.query(Deposit).filter(Deposit.order_id == order_id).first()
+        if not order:
+            return None
+        order.status = new_status
+        db.commit()
+        return order
+    finally:
+        db.close()
+
+
+def update_wallet_detail_status(order_id: str, new_status: str):
+    db = SessionLocal()
+    try:
+        wallet_detail = db.query(WalletDetail).filter(WalletDetail.order_id == order_id).first()
+        if not wallet_detail:
+            return None
+        wallet_detail.status = new_status
+        db.commit()
+        return wallet_detail
     finally:
         db.close()
 
