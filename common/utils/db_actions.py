@@ -1,6 +1,6 @@
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
@@ -72,6 +72,8 @@ def insert_log(log_type, description, source_url=None, backend_id=None, account_
         log = Log(type=log_type, description=description, source_url=source_url, backend_id=backend_id, account_id=account_id, task_id=task_id)
         db.add(log)
         db.commit()
+    except Exception as e:
+        db.rollback()
     finally:
         db.close()
 
@@ -153,6 +155,9 @@ def update_automation_result(task_id, **fields):
         db.commit()
         db.refresh(result)
         return result
+
+    except Exception as e:
+        db.rollback()
     finally:
         db.close()
 
@@ -415,7 +420,7 @@ def get_pat(token):
 def get_pat_user(tokenable_id):
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == tokenable_id).first()
+        user = db.query(User).options(joinedload(User.wallet_master)).filter(User.id == tokenable_id).first()
         if user:
             return user
         return None
@@ -441,3 +446,32 @@ def get_validated_backend_account(account_id, user_id):
         raise e
     finally:
         db.close()
+
+
+def deduct_wallet_balance(wallet_id, deduct_amount):
+    db = SessionLocal()
+    try:
+        wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
+        if wallet:
+            wallet.balance_minor = wallet.balance_minor - deduct_amount
+            db.commit()
+
+    except Exception as e:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def restore_wallet_balance(wallet_id, restore_amount):
+    db = SessionLocal()
+    try:
+        wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
+        if wallet:
+            wallet.balance_minor = wallet.balance_minor + restore_amount
+            db.commit()
+    except Exception as e:
+        db.rollback()
+    finally:
+        db.close()
+
+

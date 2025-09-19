@@ -113,6 +113,15 @@ class User(Base):
     automation_results = relationship("AutomationResult", back_populates="user")
     referral_bonuses = relationship("ReferralBonus", back_populates="user")
     spins = relationship("WheelSpin", back_populates="user")
+    wallet_master = relationship("WalletMaster", back_populates="user", uselist=False)
+
+    # --- Convenience properties ---
+    @property
+    def balance_minor(self):
+        return self.wallet_master.balance_minor if self.wallet_master else None
+    @property
+    def wallet_id(self):
+        return self.wallet_master.id if self.wallet_master else None
 
 class Deposit(Base):
     __tablename__ = "deposits"
@@ -283,3 +292,14 @@ class PersonalAccessToken(Base):
     expires_at = Column(TIMESTAMP, nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
     updated_at = Column(TIMESTAMP, nullable=True)
+
+
+class WalletMaster(Base):
+    __tablename__ = "wallet_master"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    balance_minor = Column(DECIMAL(10, 6), nullable=False, default=0.000000)
+    currency = Column(CHAR(3), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=True)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=True)
+    user = relationship("User", back_populates="wallet_master", uselist=False)
