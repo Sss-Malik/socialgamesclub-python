@@ -170,6 +170,7 @@ async def create_account(
 @app.post("/automation/recharge-account")
 async def recharge_account(
     req: RechargeAccountRequest,
+    x_order_id: Optional[str] = Header(None),
     current_user: User = Depends(require_user_token),
 ):
     backend_account = get_validated_backend_account(req.account_id, current_user.id)
@@ -184,17 +185,23 @@ async def recharge_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Insufficient wallet balance"
         )
+    if not x_order_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing order header")
+
+    order = get_order(x_order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
     deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.count)
     return _enqueue_action(
         backend_key=req.backend,
         action="recharge-account",
         description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count, "wallet_id": current_user.wallet_id},
+        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id},
         request_type="recharge",
         payload=req.dict(),
         user_id=current_user.id,
-        order_id=None,
+        order_id=x_order_id,
     )
 
 
