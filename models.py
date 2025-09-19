@@ -3,6 +3,8 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey,
 from sqlalchemy.orm import relationship
 from db import Base
 from datetime import datetime
+import enum
+from sqlalchemy.dialects.mysql import LONGTEXT
 
 class BackendGame(Base):
     __tablename__ = "backend_games"
@@ -113,6 +115,15 @@ class User(Base):
     automation_results = relationship("AutomationResult", back_populates="user")
     referral_bonuses = relationship("ReferralBonus", back_populates="user")
     spins = relationship("WheelSpin", back_populates="user")
+    wallet_master = relationship("WalletMaster", back_populates="user", uselist=False)
+
+    # --- Convenience properties ---
+    @property
+    def balance_minor(self):
+        return self.wallet_master.balance_minor if self.wallet_master else None
+    @property
+    def wallet_id(self):
+        return self.wallet_master.id if self.wallet_master else None
 
 class Deposit(Base):
     __tablename__ = "deposits"
@@ -281,5 +292,48 @@ class PersonalAccessToken(Base):
     abilities = Column(Text, nullable=True)
     last_used_at = Column(TIMESTAMP, nullable=True)
     expires_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=True)
+
+
+class WalletMaster(Base):
+    __tablename__ = "wallet_master"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    balance_minor = Column(DECIMAL(10, 6), nullable=False, default=0.000000)
+    currency = Column(CHAR(3), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=True)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=True)
+    user = relationship("User", back_populates="wallet_master", uselist=False)
+
+
+class WalletDetail(Base):
+    __tablename__ = "wallet_detail"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    wallet_id = Column(BigInteger, ForeignKey("wallet_master.id"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    order_id = Column(String(255), nullable=True)
+    amount_minor = Column(DECIMAL(10, 6), nullable=True)
+    pay_price = Column(DECIMAL(10, 6), nullable=True)
+    actually_paid = Column(DECIMAL(10, 6), nullable=True)
+    outcome_price = Column(DECIMAL(10, 6), nullable=True)
+    type = Column(
+        Enum("DEPOSIT", "LOAD_TO_GAME", name="transaction_type"),
+        nullable=False
+    )
+    method = Column(String(24), nullable=True)
+    provider = Column(String(32), nullable=True)
+    provider_payment_id = Column(String(64), nullable=True)
+    game_id = Column(BigInteger, nullable=True)
+    ref_id = Column(String(64), nullable=True)
+    currency = Column(CHAR(3), nullable=True)
+    balance_after_minor = Column(DECIMAL(10, 6), nullable=True)
+    metadata_json = Column("metadata", LONGTEXT(collation="utf8mb4_bin"), nullable=True)
+    status = Column(String(255), nullable=False, default="pending")
+    description = Column(Text, nullable=True)
+    invoice_url = Column(String(255), nullable=True)
+    reject_reason = Column(String(255), nullable=True)
+    screenshot = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
     updated_at = Column(TIMESTAMP, nullable=True)

@@ -26,7 +26,7 @@ from common.utils.db_actions import (
     get_spin,
     get_automation_result,
     insert_automation_request,
-    get_pat, get_pat_user, get_validated_backend_account
+    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance
 )
 
 # ---- App setup ----
@@ -180,38 +180,27 @@ async def recharge_account(
             detail="Account does not belong to user"
         )
 
+    if current_user.balance_minor < req.count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Insufficient wallet balance"
+        )
     if not x_order_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing order header")
 
     order = get_order(x_order_id)
-
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
-    if not order.user:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User not found")
-
-    if order.status != "finished":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Order not finished")
-
-    if order.automation_status == "finished":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already processed")
-
-    automation_result = get_automation_result(x_order_id)
-    if automation_result and automation_result.status == "pending":
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Task for this order id is already running",
-        )
-
+    deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.count)
     return _enqueue_action(
         backend_key=req.backend,
         action="recharge-account",
         description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id},
+        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id},
         request_type="recharge",
         payload=req.dict(),
-        user_id=order.user.id,
+        user_id=current_user.id,
         order_id=x_order_id,
     )
 
