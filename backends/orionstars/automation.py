@@ -39,6 +39,13 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     try:
         if page.locator(MAIN_PAGE_EL).is_visible(timeout=5_000):
             logger.info("Existing session detected; skipping login.")
+            try:
+                alert = page.locator("div#customAlert")
+                alert.wait_for(timeout=5000, state="visible")
+                close_btn = alert.locator("button#cancelBtn")
+                close_btn.click()
+            except PlaywrightTimeoutError:
+                pass
             page.frame_locator(LEFT_IFRAME).locator(USER_MANAGEMENT_XPATH).click(timeout=20_000)
             return
     except PlaywrightTimeoutError:
