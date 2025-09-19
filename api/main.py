@@ -192,12 +192,12 @@ async def recharge_account(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
-    deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.count)
+    deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.amount_to_deduct)
     return _enqueue_action(
         backend_key=req.backend,
         action="recharge-account",
         description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id},
+        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct},
         request_type="recharge",
         payload=req.dict(),
         user_id=current_user.id,
