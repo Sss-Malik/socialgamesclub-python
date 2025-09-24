@@ -17,7 +17,7 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_automation_result, mark_freeplay_transferred, increment_active_tasks_count, decrement_active_tasks_count, \
     invalidate_latest_session, create_backend_session, finalize_status, mark_redeem_request_status, get_backend_account, \
     mark_bonus_transferred, update_password_by_username, restore_wallet_balance, update_order_status, \
-    update_wallet_detail_status
+    update_wallet_detail_status, get_backend_and_account
 from common.utils.browser import with_persistent_browser
 from backends.ultrapanda.utils.session import inject_session_token, validate_session_token
 from common.utils.redis_utils import acquire_login_lock, release_login_lock
@@ -670,8 +670,8 @@ def action_create_account(page: Page, task_id, backend):
 
 @with_persistent_browser
 def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend, wallet_id, amount_to_deduct):
-    backend = get_backend(BACKEND_NAME)
-    _ = get_backend_account(account_id)
+    backend_game, backend_account = get_backend_and_account(backend, account_id)
+
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
@@ -682,19 +682,19 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         insert_log(
             "info",
             f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        session = _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
             increment_active_tasks_count(session.id)
         _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct)
     except (PlaywrightTimeoutError, Exception) as e:
         restore_wallet_balance(wallet_id, amount_to_deduct)
         insert_log("info", "Critical error during account recharge - Wallet balance restored", source_url=str(page.url),
-                   backend_id=backend.id, account_id=_.id, task_id=task_id)
+                   backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -707,20 +707,20 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         insert_log(
             "error",
             f"Error during account recharge: {e}",
-            source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, task_id=task_id
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
-        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
 
 @with_persistent_browser
 def action_freeplay_account(page: Page, count: int, account_id: str, backend, task_id, t, id_to_update):
-    backend = get_backend(BACKEND_NAME)
-    _ = get_backend_account(account_id)
+    backend_game, backend_account = get_backend_and_account(backend, account_id)
+
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Recharge-account action started: account_id=%s, count=%d", account_id, count)
@@ -731,16 +731,16 @@ def action_freeplay_account(page: Page, count: int, account_id: str, backend, ta
         insert_log(
             "info",
             f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        session = _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
             increment_active_tasks_count(session.id)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -753,20 +753,20 @@ def action_freeplay_account(page: Page, count: int, account_id: str, backend, ta
         insert_log(
             "error",
             f"Error during account recharge: {e}",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
         logger.info("Recharge-account action completed.")
-        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
 
 @with_persistent_browser
 def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
-    backend = get_backend(BACKEND_NAME)
-    _ = get_backend_account(account_id)
+    backend_game, backend_account = get_backend_and_account(backend, account_id)
+
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Withdraw-account action started: account_id=%s, count=%d", account_id, count)
@@ -777,16 +777,16 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         insert_log(
             "info",
             f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        session = _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
             increment_active_tasks_count(session.id)
         _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -799,19 +799,19 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         insert_log(
             "error",
             f"Error during account withdrawal: {e}",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
         logger.info("Withdraw-account action completed.")
-        insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
 @with_persistent_browser
 def action_read_account(page: Page, account_id: str, task_id, backend):
-    backend = get_backend(BACKEND_NAME)
-    _ = get_backend_account(account_id)
+    backend_game, backend_account = get_backend_and_account(backend, account_id)
+
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Read-account action started: account_id=%s", account_id)
@@ -821,16 +821,16 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
     try:
         insert_log(
             "info",
-            f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        session = _login_and_navigate(page, logger, backend, task_id)
+        session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
             increment_active_tasks_count(session.id)
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -843,21 +843,20 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         insert_log(
             "error",
             f"Error during account read: {e}",
-            source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id
+            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         if session:
             decrement_active_tasks_count(session.id)
         logger.info("Read-account action completed.")
-        insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
 
 
 @with_persistent_browser
 def action_reset_password(page: Page, account_id: str, task_id, backend):
-    backend = get_backend(BACKEND_NAME)
-    _ = get_backend_account(account_id)
+    backend_game, backend_account = get_backend_and_account(backend, account_id)
 
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -867,14 +866,14 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
         insert_log(
             "info",
             f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
-            backend_id=backend.id, account_id=_.id, task_id=task_id
+            backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _reset_password(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             account_id=account_id,
             task_id=task_id,
         )
@@ -888,10 +887,10 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
             "error",
             f"Error during account password reset: {e}",
             source_url=str(page.url),
-            backend_id=backend.id,
-            account_id=_.id, task_id=task_id
+            backend_id=backend_game.id,
+            account_id=backend_account.id, task_id=task_id
         )
         update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Reset-password action completed.")
-        insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend.id, account_id=_.id, task_id=task_id)
+        insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
