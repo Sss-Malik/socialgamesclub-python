@@ -17,7 +17,7 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_automation_result, mark_freeplay_transferred, increment_active_tasks_count, decrement_active_tasks_count, \
     invalidate_latest_session, create_backend_session, finalize_status, mark_redeem_request_status, get_backend_account, \
     mark_bonus_transferred, update_password_by_username, restore_wallet_balance, update_order_status, \
-    update_wallet_detail_status, get_backend_and_account
+    update_wallet_detail_status, get_backend_and_account, process_recharge_operation
 from common.utils.browser import with_persistent_browser
 from backends.ultrapanda.utils.session import inject_session_token, validate_session_token
 from common.utils.redis_utils import acquire_login_lock, release_login_lock
@@ -288,47 +288,104 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             alert.wait_for(state="visible", timeout=25000)
             text = alert.inner_text().strip().lower()
             if "not authorized to check remaining balance" in text:
-                restore_wallet_balance(wallet_id, amount_to_deduct)
-                logger.info("Wallet balance restored")
-                logger.error("Recharge failed: backend balance insufficient.")
                 send_email(
                     subject="Recharge failed",
                     body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
                 )
-                update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
-                update_order_status(order_id, "failed")
-                update_wallet_detail_status(order_id, "failed")
-                update_order_automation_status(order_id, "failed")
-                insert_log("error", description="Backend balance insufficient - Wallet balance restored", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+                logger.error("Recharge failed: backend balance insufficient.")
+                process_recharge_operation(
+                    order_id=order_id,
+                    task_id=task_id,
+                    account_id=_.id,
+                    backend_id=BACKEND_ID,
+                    page_url=str(page.url),
+                    log_data={
+                        "type": "warning",
+                        "description": "Backend balance insufficient - Wallet balance restored"
+                    },
+                    order_status="failed",
+                    automation_status="failed",
+                    automation_result_fields={
+                        "status": "failed",
+                        "description": f"Insufficient backend balance for {BACKEND_NAME}"
+                    },
+                    wallet_status="failed",
+                    restore_wallet=True,
+                    amount_to_restore=amount_to_deduct,
+                    wallet_id=wallet_id,
+                )
+                logger.info("Wallet balance restored")
                 return
             elif "sucessful operation" in text:
                 logger.info("Recharge successful.")
-                insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                update_order_automation_status(order_id, "finished")
-                update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-                update_order_status(order_id, "finished")
-                update_wallet_detail_status(order_id, "finished")
+                process_recharge_operation(
+                    order_id=order_id,
+                    task_id=task_id,
+                    account_id=_.id,
+                    backend_id=BACKEND_ID,
+                    page_url=str(page.url),
+                    log_data={
+                        "type": "info",
+                        "description": f"Recharge successful for account: {account_id}"
+                    },
+                    order_status="finished",
+                    automation_status="finished",
+                    automation_result_fields={
+                        "status": "success",
+                        "description": "Recharge successful"
+                    },
+                    wallet_status="finished"
+                )
                 if _.user.bonus_received:
                     mark_bonus_transferred(account_id)
 
             else:
-                restore_wallet_balance(wallet_id, amount_to_deduct)
-                logger.info("Wallet balance restored")
                 logger.warning(f"Unexpected recharge response: {text}")
-                update_order_status(order_id, "failed")
-                update_wallet_detail_status(order_id, "failed")
-                update_order_automation_status(order_id, "failed")
-                update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
-                insert_log("warning", f"Unexpected recharge response: {text} - Wallet balance restored", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+                process_recharge_operation(
+                    order_id=order_id,
+                    task_id=task_id,
+                    account_id=_.id,
+                    backend_id=BACKEND_ID,
+                    page_url=str(page.url),
+                    log_data={
+                        "type": "warning",
+                        "description": f"Unexpected recharge response: {text} - Wallet balance restored"
+                    },
+                    order_status="failed",
+                    automation_status="failed",
+                    automation_result_fields={
+                        "status": "failed",
+                        "description": f"Unexpected recharge response on {BACKEND_NAME}"
+                    },
+                    wallet_status="failed",
+                    restore_wallet=True,
+                    amount_to_restore=amount_to_deduct,
+                    wallet_id=wallet_id,
+                )
+                logger.info("Wallet balance restored")
         except PlaywrightTimeoutError:
-            restore_wallet_balance(wallet_id, amount_to_deduct)
+            process_recharge_operation(
+                order_id=order_id,
+                task_id=task_id,
+                account_id=_.id,
+                backend_id=BACKEND_ID,
+                page_url=str(page.url),
+                log_data={
+                    "type": "warning",
+                    "description": f"Failed to detect dialog after recharge for account: {account_id} - Wallet balance restored"
+                },
+                order_status="failed",
+                automation_status="failed",
+                automation_result_fields={
+                    "status": "failed",
+                    "description": f"Failed to detect result after recharge on {BACKEND_NAME}"
+                },
+                wallet_status="failed",
+                restore_wallet=True,
+                amount_to_restore=amount_to_deduct,
+                wallet_id=wallet_id,
+            )
             logger.info("Wallet balance restored")
-            logger.exception("No dialog appeared after setting score.")
-            update_order_automation_status(order_id, "failed")
-            update_order_status(order_id, "failed")
-            update_wallet_detail_status(order_id, "failed")
-            update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
-            insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id} - Wallet balance restored", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
         break
 
 
