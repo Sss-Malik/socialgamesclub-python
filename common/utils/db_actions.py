@@ -602,3 +602,46 @@ def get_backend_and_account(backend_name: str, account_id: str):
         return None, None
     finally:
         db.close()
+
+def insert_automation_result_and_request(
+    *,
+    user_id=None,
+    description=None,
+    task_id=None,
+    backend_id=None,
+    order_id=None,
+    request_type=None,
+    payload=None,
+    status="pending",
+    status_code=None,
+):
+    db = SessionLocal()
+    try:
+        result = AutomationResult(
+            user_id=user_id,
+            description=description,
+            task_id=task_id,
+            backend_id=backend_id,
+            order_id=order_id,
+            status=status,
+        )
+        request = AutomationRequest(
+            task_id=task_id,
+            type=request_type,
+            payload=payload,
+            status_code=status_code,
+        )
+
+        db.add(result)
+        db.add(request)
+
+        db.commit()
+        db.refresh(result)
+        db.refresh(request)
+
+        return result, request
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
