@@ -498,3 +498,150 @@ def restore_wallet_balance(wallet_id, restore_amount):
         db.close()
 
 
+
+
+def process_recharge_operation(
+    *,
+    order_id: str,
+    task_id: int = None,
+    account_id: int = None,
+    backend_id: int = None,
+    page_url: str = None,
+    log_data: dict = None,               # { "type": "info", "description": "...", ... }
+    order_status: str = None,            # e.g., "finished" or "failed"
+    automation_status: str = None,       # e.g., "finished" or "failed"
+    automation_result_fields: dict = None,  # e.g., { "status": "success", "description": "Recharge successful" }
+    wallet_status: str = None,        # e.g., "finished" or "failed"
+    restore_wallet: bool = False,
+    amount_to_restore: int = None,
+    wallet_id: int = None,
+):
+    db = SessionLocal()
+    try:
+        results = {}
+
+        if restore_wallet:
+            wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
+            if wallet:
+                wallet.balance_minor = wallet.balance_minor + amount_to_restore
+                results["wallet"] = wallet
+
+        # 1. Insert log if provided
+        if log_data:
+            log = Log(
+                type=log_data.get("type"),
+                description=log_data.get("description"),
+                source_url=log_data.get("source_url", str(page_url) if page_url else None),
+                backend_id=backend_id,
+                account_id=account_id,
+                task_id=task_id,
+            )
+            db.add(log)
+            results["log"] = log
+
+        # 2. Update order (automation_status + status in one query)
+        order = db.query(Deposit).filter(Deposit.order_id == order_id).first()
+        if order:
+            if automation_status is not None:
+                order.automation_status = automation_status
+            if order_status is not None:
+                order.status = order_status
+            results["order"] = order
+
+        # 3. Update automation result if fields provided
+        if task_id and automation_result_fields:
+            result = db.query(AutomationResult).filter(AutomationResult.task_id == task_id).first()
+            if result:
+                for key, value in automation_result_fields.items():
+                    if hasattr(result, key):
+                        setattr(result, key, value)
+                results["automation_result"] = result
+
+        # 4. Update wallet detail if requested
+        if wallet_status is not None:
+            wallet_detail = db.query(WalletDetail).filter(WalletDetail.order_id == order_id).first()
+            if wallet_detail:
+                wallet_detail.status = wallet_status
+                results["wallet_detail"] = wallet_detail
+
+        # ✅ Commit once for all
+        db.commit()
+
+        # refresh objects if needed
+        for obj in results.values():
+            db.refresh(obj)
+
+        return results
+
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+
+def get_backend_and_account(backend_name: str, account_id: str):
+    db = SessionLocal()
+    try:
+        result = (
+            db.query(BackendGame, BackendAccount)
+            .join(BackendAccount, BackendAccount.backend_id == BackendGame.id)
+            .options(joinedload(BackendAccount.user))
+            .filter(
+                BackendGame.name == backend_name,
+                BackendGame.deleted_at == None,
+                BackendAccount.username == account_id,
+                BackendAccount.deleted_at == None,
+            )
+            .first()
+        )
+        if result:
+            backend, account = result
+            return backend, account
+        return None, None
+    finally:
+        db.close()
+
+def insert_automation_result_and_request(
+    *,
+    user_id=None,
+    description=None,
+    task_id=None,
+    backend_id=None,
+    order_id=None,
+    request_type=None,
+    payload=None,
+    status="pending",
+    status_code=None,
+):
+    db = SessionLocal()
+    try:
+        result = AutomationResult(
+            user_id=user_id,
+            description=description,
+            task_id=task_id,
+            backend_id=backend_id,
+            order_id=order_id,
+            status=status,
+        )
+        request = AutomationRequest(
+            task_id=task_id,
+            type=request_type,
+            payload=payload,
+            status_code=status_code,
+        )
+
+        db.add(result)
+        db.add(request)
+
+        db.commit()
+        db.refresh(result)
+        db.refresh(request)
+
+        return result, request
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

@@ -26,7 +26,7 @@ from common.utils.db_actions import (
     get_spin,
     get_automation_result,
     insert_automation_request,
-    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance
+    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance, insert_automation_result_and_request
 )
 
 # ---- App setup ----
@@ -119,18 +119,15 @@ def _enqueue_action(
 
     backend = get_backend(backend_key)
 
-    insert_automation_result(
-        task_id=task_id,
-        description=description,
+    insert_automation_result_and_request(
         user_id=user_id,
+        description=description,
+        task_id=task_id,
         backend_id=backend.id,
         order_id=order_id,
-    )
-
-    insert_automation_request(
-        task_id=task_id,
-        request_type=request_type,
         payload={"action": action, **payload},
+        request_type=request_type,
+
     )
 
     task = invoke_action.apply_async(
