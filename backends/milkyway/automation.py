@@ -624,12 +624,12 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             f"Initiating recharge for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -664,12 +664,12 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -702,12 +702,12 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
             "info",
             f"Initiating read for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
@@ -742,12 +742,12 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
             f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
             backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _reset_password(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             account_id=account_id,
             task_id=task_id,
         )
