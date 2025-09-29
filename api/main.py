@@ -177,7 +177,7 @@ async def recharge_account(
             detail="Account does not belong to user"
         )
 
-    if current_user.balance_minor < req.count:
+    if current_user.balance_minor < req.amount_to_deduct:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Insufficient wallet balance"
