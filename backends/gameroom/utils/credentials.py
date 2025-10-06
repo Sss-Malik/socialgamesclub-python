@@ -2,7 +2,7 @@ import random
 import string
 
 from backends.gameroom.config import BACKEND_SIGNATURE
-
+from settings import WORDS_FOR_PASSWORD
 def generate_credentials():
     # Validate that BACKEND_SIGNATURE contains at least one letter
     if not any(c.isalpha() for c in BACKEND_SIGNATURE):
@@ -47,15 +47,8 @@ def generate_credentials():
     #             return x
 
     def generate_password():
-        # a small pool of user-friendly words (you can expand this)
-        words = [
-            "apple", "banana", "cherry", "orange", "tomato", "grape", "mango",
-            "sunset", "cloud", "river", "forest", "ocean", "mountain",
-            "shadow", "light", "storm", "rain", "flame", "stone", "leaf"
-        ]
-
         # randomly choose a word length range 4–6 letters
-        filtered_words = [w for w in words if 4 <= len(w) <= 6]
+        filtered_words = [w for w in WORDS_FOR_PASSWORD if 4 <= len(w) <= 6]
 
         # pick one random word
         word = random.choice(filtered_words)
