@@ -1,7 +1,7 @@
 import random
 import string
 
-from backends.gamevault.config import BACKEND_SIGNATURE
+from backends.juwa.config import BACKEND_SIGNATURE
 from settings import WORDS_FOR_PASSWORD
 
 def generate_credentials():
@@ -22,6 +22,7 @@ def generate_credentials():
     account_id = f"{prefix}{BACKEND_SIGNATURE}{random_number}"
 
     def generate_password():
+
         # randomly choose a word length range 4–6 letters
         filtered_words = [w for w in WORDS_FOR_PASSWORD if 4 <= len(w) <= 6]
 

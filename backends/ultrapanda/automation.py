@@ -177,7 +177,7 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
     while True:
-        delay = random.randint(1000, 6000)
+        delay = random.randint(1000, 5000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials()

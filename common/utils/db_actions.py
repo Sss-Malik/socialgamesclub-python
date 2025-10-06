@@ -1,3 +1,5 @@
+import json
+
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
     WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail
@@ -640,6 +642,73 @@ def insert_automation_result_and_request(
         db.refresh(request)
 
         return result, request
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def insert_log_and_update_automation_result(
+    *,
+    log_type=None,
+    log_description=None,
+    task_id=None,
+    backend_id=None,
+    source_url=None,
+    account_id=None,
+    new_status=None,
+    new_description=None,
+    new_data=None,
+):
+    db = SessionLocal()
+    try:
+        # 1. Update the AutomationResult (if exists)
+        result = (
+            db.query(AutomationResult)
+            .filter(AutomationResult.task_id == task_id)
+            .with_for_update()  # lock row to prevent race conditions
+            .one_or_none()
+        )
+
+        if result:
+            if new_status:
+                result.status = new_status
+            if new_description:
+                result.description = new_description
+            if new_data:
+                result.data = json.dumps(new_data)
+        else:
+            # Optionally: create one if not exists
+            result = AutomationResult(
+                task_id=task_id,
+                backend_id=backend_id,
+                status=new_status or "pending",
+                description=new_description,
+                data=new_data,
+            )
+            db.add(result)
+
+        # 2. Always add a new Log
+        log = Log(
+            type=log_type,
+            description=log_description,
+            source_url=source_url,
+            backend_id=backend_id,
+            task_id=task_id,
+            account_id=account_id,
+        )
+        db.add(log)
+
+        # 3. Commit transaction
+        db.commit()
+
+        # refresh objects if you want to return them
+        db.refresh(result)
+        db.refresh(log)
+
+        return result, log
+
     except Exception:
         db.rollback()
         raise

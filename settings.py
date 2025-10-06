@@ -42,3 +42,13 @@ MAIL_RECIPIENT = ["samadmalik@hotmail.com", "msaud946@gmail.com"]
 import os
 # Base path for your project root (so we can find backends/)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+WORDS_FOR_PASSWORD = [
+    "apple", "banana", "cherry", "orange", "tomato", "grape", "mango",
+    "sunset", "cloud", "river", "forest", "ocean", "mountain",
+    "shadow", "light", "storm", "rain", "flame", "stone", "leaf",
+    "tree", "snow", "wind", "star", "moon", "seed", "rose", "lava", "wave", "dust",
+    "pearl", "beach", "bloom", "crash", "flint", "breeze", "grass", "coral", "plume", "spark",
+    "thunder", "desert", "valley", "island", "planet", "stream", "meadow", "horizon", "tunnel", "harbor",
+    "table", "phone", "marker", "plane", "console"
+]

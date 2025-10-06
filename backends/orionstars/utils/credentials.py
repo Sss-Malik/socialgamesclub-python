@@ -1,7 +1,7 @@
 import random
 import string
 
-from backends.milkyway.config import BACKEND_SIGNATURE
+from backends.orionstars.config import BACKEND_SIGNATURE
 from settings import WORDS_FOR_PASSWORD
 
 def generate_credentials():
@@ -9,6 +9,7 @@ def generate_credentials():
         # Leave room for 'user_' and backend_signature
         max_num_len = 13 - (len("user_") + len(BACKEND_SIGNATURE))
         return ''.join(random.choices(string.digits, k=random.randint(1, max_num_len)))
+
     # (old func)
     # def generate_password():
     #     chars = string.ascii_letters + string.digits + "_"

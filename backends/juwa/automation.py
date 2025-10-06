@@ -10,7 +10,7 @@ from common.utils.aws_s3 import capture_and_upload_screenshot
 from common.utils.emails import send_email
 
 from common.utils.logger import get_backend_logger
-from common.utils.credential_utils import generate_credentials
+from backends.juwa.utils.credentials import generate_credentials
 from common.utils.ensure_directories import ensure_directories
 from common.utils.handle_captcha import handle_captcha
 from common.utils.save_credentials import save_credentials
@@ -94,11 +94,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
     logger.debug("Opening create account dialog.")
     while True:
-        delay = random.randint(1000, 6000)
+        delay = random.randint(1000, 5000)
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
         page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
-        account_id, password = generate_credentials(BACKEND_SIGNATURE)
+        account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
         page.locator(ACCOUNT_ID).fill(account_id)

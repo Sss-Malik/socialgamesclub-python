@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 
 from backends.pandamaster.config import *
 from common.utils.aws_s3 import capture_and_upload_screenshot
-from common.utils.credential_utils import generate_credentials
+from backends.pandamaster.utils.credentials import generate_credentials
 from backends.pandamaster.utils.actions import click_update_for_account
 from common.utils.emails import send_email
 
@@ -111,8 +111,8 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
     dialog = page.frame_locator(CREATE_ACCOUNT_DIALOG)
 
     while True:
-        delay = random.randint(1000, 10000)
-        account_id, password = generate_credentials(BACKEND_SIGNATURE)
+        delay = random.randint(1000, 2000)
+        account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
         dialog.locator(ACCOUNT_ID).fill(account_id)

@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as Playwrigh
 
 from backends.orionstars.config import *
 from common.utils.aws_s3 import capture_and_upload_screenshot
-from common.utils.credential_utils import generate_credentials
+from backends.orionstars.utils.credentials import generate_credentials
 from backends.orionstars.utils.actions import click_update_for_account
 from common.utils.emails import send_email
 
@@ -124,6 +124,14 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
     logger.debug("Opening create account dialog.")
+    try:
+        alert = page.locator("div#customAlert")
+        alert.wait_for(timeout=2000, state="visible")
+        logger.debug("custom alert detected")
+        close_btn = alert.locator("button#cancelBtn")
+        close_btn.click()
+    except PlaywrightTimeoutError:
+        pass
     page.wait_for_selector(MAIN_IFRAME, timeout=10_000)
     main_frame = page.frame_locator(MAIN_IFRAME)
     create_acc = main_frame.locator(CREATE_ACCOUNT_INIT)
@@ -134,8 +142,8 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
     dialog = page.frame_locator(CREATE_ACCOUNT_DIALOG)
 
     while True:
-        delay = random.randint(1000, 10000)
-        account_id, password = generate_credentials(BACKEND_SIGNATURE)
+        delay = random.randint(1000, 3000)
+        account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
         dialog.locator(ACCOUNT_ID).fill(account_id)
