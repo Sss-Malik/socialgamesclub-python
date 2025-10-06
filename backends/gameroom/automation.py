@@ -176,7 +176,7 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
     dialog_iframe.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
     while True:
-        delay = random.randint(1000, 6000)
+        delay = random.randint(1000, 3000)
         account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
