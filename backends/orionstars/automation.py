@@ -677,12 +677,12 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             f"Initiating withdrawal for account ID {account_id} on backend '{BACKEND_NAME}' with count {count}.",
             source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend, task_id)
+        _login_and_navigate(page, logger, backend_game, task_id)
         _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
