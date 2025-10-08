@@ -18,7 +18,7 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
     mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
     restore_wallet_balance, update_order_status, update_wallet_detail_status, get_backend_and_account, \
-    process_recharge_operation
+    process_recharge_operation, update_freeplay
 from common.utils.browser import with_persistent_browser
 
 
@@ -304,7 +304,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         logger.info("Wallet balance restored")
 
 
-def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, t, id_to_update):
+def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, t, id_to_update, freeplay_id):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
     _ = get_backend_account(account_id)
 
@@ -336,6 +336,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
+            update_freeplay(freeplay_id, "success")
             if t == "signup_freeplay":
                 mark_freeplay_transferred(account_id)
             else:
@@ -599,7 +600,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
 
 
 @with_persistent_browser
-def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend, t, id_to_update):
+def action_freeplay_account(page: Page, count: int, account_id: str, task_id, backend, t, id_to_update, freeplay_id):
     backend_game, backend_account = get_backend_and_account(backend, account_id)
 
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -613,7 +614,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         _login_and_navigate(page, logger, backend_game, task_id)
-        _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update)
+        _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update, freeplay_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
