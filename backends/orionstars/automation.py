@@ -496,7 +496,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
 def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Initiating password reset for account {account_id}")
     _ = get_backend_account(account_id)
-    __, password = generate_credentials(BACKEND_SIGNATURE)
+    __, password = generate_credentials()
 
     main = page.frame_locator(MAIN_IFRAME)
     main.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
