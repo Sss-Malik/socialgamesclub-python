@@ -311,6 +311,7 @@ async def recharge_freeplay(
             "count": int(count),
             "t": t,
             "id_to_update": id_to_update,
+            "freeplay_id": req.freeplay_id,
         },
         request_type="freeplay",
         payload=req.dict(),

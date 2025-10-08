@@ -2,7 +2,7 @@ import json
 
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
@@ -712,5 +712,22 @@ def insert_log_and_update_automation_result(
     except Exception:
         db.rollback()
         raise
+    finally:
+        db.close()
+
+
+def update_freeplay(idx, status):
+    db = SessionLocal()
+    try:
+        freeplay = db.query(Freeplay).filter(Freeplay.id == idx).first()
+        if not freeplay:
+            return False
+        freeplay.status = status
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error marking freeplay status: {e}")
+        return False
     finally:
         db.close()
