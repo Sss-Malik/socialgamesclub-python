@@ -25,6 +25,7 @@ class BackendGame(Base):
     accounts = relationship("BackendAccount", back_populates="backend")
     automation_results = relationship("AutomationResult", back_populates="backend")
     logs = relationship("Log", back_populates="backend")
+    freeplays = relationship("Freeplay", back_populates="backend")
 
 
 class BackendAccount(Base):
@@ -116,6 +117,8 @@ class User(Base):
     referral_bonuses = relationship("ReferralBonus", back_populates="user")
     spins = relationship("WheelSpin", back_populates="user")
     wallet_master = relationship("WalletMaster", back_populates="user", uselist=False)
+
+    freeplays = relationship("Freeplay", back_populates="user")
 
     # --- Convenience properties ---
     @property
@@ -337,3 +340,28 @@ class WalletDetail(Base):
     screenshot = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
     updated_at = Column(TIMESTAMP, nullable=True)
+
+
+class Freeplay(Base):
+    __tablename__ = "freeplays"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
+    status = Column(
+        Enum("pending", "completed", "failed", "success", name="freeplay_status_enum"),
+        nullable=False,
+        default="pending",
+        server_default="pending"
+    )
+    source = Column(String(255), nullable=True)
+    backend_id = Column(BigInteger, ForeignKey("backend_games.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="freeplays")
+    backend = relationship("BackendGame", back_populates="freeplays")
+
+    def __repr__(self):
+        return f"<Freeplay(id={self.id}, user_id={self.user_id}, backend_id={self.backend_id}, status='{self.status}')>"
