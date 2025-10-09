@@ -18,7 +18,8 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     create_backend_session, increment_active_tasks_count, decrement_active_tasks_count, finalize_status, \
     mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
     restore_wallet_balance, update_order_status, update_wallet_detail_status, get_backend_and_account, \
-    process_recharge_operation, update_freeplay
+    process_recharge_operation, update_freeplay, insert_log_and_update_automation_result, process_freeplay_operation
+
 from common.utils.browser import with_persistent_browser
 from common.utils.poll_utils import wait_for_valid_session, wait_for_active_tasks_to_zero
 from backends.gameroom.utils.session import inject_session_token, validate_session_token
@@ -468,11 +469,20 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
             logger.info("Recharge successful.")
             insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
             update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
+
             update_freeplay(freeplay_id, "success")
-            if t == "signup_freeplay":
-                mark_freeplay_transferred(account_id)
-            else:
-                finalize_status(t, True, id_to_update)
+            process_freeplay_operation(
+                t=t,
+                username=account_id,
+                account_id=_.id,
+                id_to_update=id_to_update,
+                backend_id=BACKEND_ID,
+                task_id=task_id,
+            )
+            # if t == "signup_freeplay":
+            #     mark_freeplay_transferred(account_id)
+            # else:
+            #     finalize_status(t, True, id_to_update)
             main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
         elif "recharge balance is greater than available balance" in text:
             send_email(
@@ -523,21 +533,42 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
 
         if "reset successful" in text:
             logger.info("Password reset successful.")
-            insert_log("info", description=f"Password reset successful for account {account_id}",
-                       source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-            update_automation_result(task_id=task_id, description="Password reset successful.", status="success",
-                                     data=json.dumps({"password": password}))
+            insert_log_and_update_automation_result(
+                log_type="info",
+                log_description=f"Password reset successful for account {account_id}",
+                task_id=task_id,
+                source_url=str(page.url),
+                backend_id=BACKEND_ID,
+                account_id=_.id,
+                result_status="success",
+                result_description="Password reset successful.",
+                result_data={"password": password}
+            )
             update_password_by_username(username=account_id, new_password=password)
         else:
             logger.warning(f"Password reset failed. Unhandled reset response: {text}")
-            insert_log("error", description=f"Password reset failed. Unhandled reset response: {text}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-            update_automation_result(task_id=task_id, description=f"Password reset failed. Unhandled reset response: {text}", status="failed")
+            insert_log_and_update_automation_result(
+                log_type="error",
+                log_description=f"Password reset failed. Unhandled reset response: {text}",
+                task_id=task_id,
+                source_url=str(page.url),
+                backend_id=BACKEND_ID,
+                account_id=_.id,
+                result_status="failed",
+                result_description=f"Password reset failed. Unhandled reset response: {text}",
+            )
     except PlaywrightTimeoutError:
         logger.warning("Password reset failed. Failed to detect result after reset")
-        insert_log("error", description="Failed to detect reset response", source_url=str(page.url),
-                   backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-        update_automation_result(task_id=task_id, description="Failed to detect reset response", status="failed")
-
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description="Failed to detect reset response",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status="failed",
+            result_description="Failed to detect reset response",
+        )
 
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):
