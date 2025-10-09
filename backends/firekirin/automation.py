@@ -15,7 +15,7 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
     mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
     restore_wallet_balance, update_order_status, update_wallet_detail_status, process_recharge_operation, \
-    get_backend_and_account, update_freeplay, insert_log_and_update_automation_result
+    get_backend_and_account, update_freeplay, insert_log_and_update_automation_result, process_freeplay_operation
 from common.utils.browser import with_persistent_browser
 from common.utils.aws_s3 import capture_and_upload_screenshot
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -307,7 +307,6 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
         text = result.inner_text().strip().lower()
         if "successful" in text:
             logger.info("Recharge successful.")
-            update_freeplay(freeplay_id, "success")
             insert_log_and_update_automation_result(
                 log_type="info",
                 log_description=f"Freeplay Recharge successful for account: {account_id}",
@@ -318,10 +317,15 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                 result_status="success",
                 result_description="Freeplay Recharge successful",
             )
-            if t == "signup_freeplay":
-                mark_freeplay_transferred(account_id)
-            else:
-                finalize_status(t, True, id_to_update)
+            process_freeplay_operation(
+                t=t,
+                username=account_id,
+                account_id=_.id,
+                backend_id=BACKEND_ID,
+                task_id=task_id,
+                freeplay_id=freeplay_id,
+                id_to_update=id_to_update,
+            )
         elif "insufficient" in text:
             logger.error("Recharge failed: backend balance insufficient.")
             send_email(

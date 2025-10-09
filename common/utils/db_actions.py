@@ -748,6 +748,7 @@ def process_freeplay_operation(
     username: str = None,
     account_id: str = None,
     id_to_update: int = None,
+    freeplay_id: int = None,
     backend_id: int = None,
     task_id: int = None
 ) -> bool:
@@ -796,6 +797,11 @@ def process_freeplay_operation(
         else:
             raise ValueError(f"Unknown freeplay operation type: '{t}'")
 
+        freeplay = db.query(Freeplay).filter(Freeplay.id == freeplay_id).first()
+        if not freeplay:
+            raise ValueError(f"Freeplay not found for id={freeplay_id}")
+        freeplay.status = "success"
+
         db.commit()
         return True
 
@@ -806,7 +812,7 @@ def process_freeplay_operation(
         try:
             error_log = Log(
                 type="error",
-                description=f"Error processing freeplay operation '{t}': {str(e)}",
+                description=f"<DATABASE ERROR>Error processing freeplay operation '{t}': {str(e)}",
                 backend_id=backend_id,
                 account_id=account_id,
                 task_id=task_id,

@@ -18,7 +18,8 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
     mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
     deduct_wallet_balance, restore_wallet_balance, update_order_status, update_wallet_detail_status, \
-    get_backend_and_account, process_recharge_operation, update_freeplay
+    get_backend_and_account, process_recharge_operation, update_freeplay, insert_log_and_update_automation_result, \
+    process_freeplay_operation
 from common.utils.browser import with_persistent_browser
 
 from settings import APP_ENV, HEADLESS, DEBUG
@@ -477,14 +478,28 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
                     subject="Recharge failed",
                     body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
                 )
-                insert_log("warning", "Backend balance insufficient", source_url=str(page.url),
-                           backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                update_automation_result(task_id=task_id, status="failed", description=f"Insufficient backend balance on {BACKEND_NAME}")
+                insert_log_and_update_automation_result(
+                    log_type="warning",
+                    log_description="Backend balance insufficient",
+                    task_id=task_id,
+                    source_url=str(page.url),
+                    backend_id=BACKEND_ID,
+                    account_id=_.id,
+                    result_status="failed",
+                    result_description=f"Insufficient backend balance for {BACKEND_NAME}",
+                )
                 return
             if "form is being submitted" in text:
-                insert_log("warning", "Form submission error. Please try again", source_url=str(page.url),
-                           backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                update_automation_result(task_id=task_id, status="failed", description=f"Form submission error on {BACKEND_NAME}")
+                insert_log_and_update_automation_result(
+                    log_type="warning",
+                    log_description="Form submission error. Please try again",
+                    task_id=task_id,
+                    source_url=str(page.url),
+                    backend_id=BACKEND_ID,
+                    account_id=_.id,
+                    result_status="failed",
+                    result_description=f"Form submission error on {BACKEND_NAME}",
+                )
                 return
 
     # verify deposit
@@ -496,21 +511,49 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
         txt = deposit.inner_text().strip().lower()
         if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
             logger.info("Recharge successful.")
-            insert_log("info", f"Recharge successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-            update_automation_result(task_id=task_id, status="success", description="Recharge successful.")
-            update_freeplay(freeplay_id, "success")
-            if t == "signup_freeplay":
-                mark_freeplay_transferred(account_id)
-            else:
-                finalize_status(t, True, id_to_update)
+            insert_log_and_update_automation_result(
+                log_type="info",
+                log_description=f"Freeplay Recharge successful for account: {account_id}",
+                task_id=task_id,
+                source_url=str(page.url),
+                backend_id=BACKEND_ID,
+                account_id=_.id,
+                result_status="success",
+                result_description="Freeplay Recharge successful",
+            )
+            process_freeplay_operation(
+                t=t,
+                username=account_id,
+                account_id=_.id,
+                freeplay_id=freeplay_id,
+                id_to_update=id_to_update,
+                backend_id=BACKEND_ID,
+                task_id=task_id,
+            )
         else:
             logger.warning(f"Unexpected recharge response: {txt}")
-            insert_log("warning", f"Unexpected recharge response: {txt}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-            update_automation_result(task_id=task_id, status="failed", description=f"Unexpected recharge response on {BACKEND_NAME}")
+            insert_log_and_update_automation_result(
+                log_type="warning",
+                log_description=f"Unexpected recharge response: {txt}",
+                task_id=task_id,
+                source_url=str(page.url),
+                backend_id=BACKEND_ID,
+                account_id=_.id,
+                result_status="failed",
+                result_description=f"Unexpected recharge response on {BACKEND_NAME}",
+            )
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
-        insert_log("warning", f"Failed to detect dialog after recharge for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after recharge on {BACKEND_NAME}")
+        insert_log_and_update_automation_result(
+            log_type="warning",
+            log_description=f"Failed to detect dialog after recharge for account: {account_id}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status="failed",
+            result_description=f"Failed to detect result after recharge on {BACKEND_NAME}",
+        )
 
 def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_id: str, task_id, redeem_request_id):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={amount}")
@@ -555,25 +598,61 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
                 text = msg.inner_text().strip().lower()
                 if "the redeem amount can not be greater than the balance on the body！" in text:
                     logger.error("Withdrawal failed due to insufficient gold.")
-                    insert_log("warning", description="Withdrawal failed due to insufficient customer balance.", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                    update_automation_result(task_id=task_id, status="failed", description="Insufficient customer balance.")
-                    mark_redeem_request_status(redeem_request_id, "failed")
+                    insert_log_and_update_automation_result(
+                        log_type="warning",
+                        log_description="Insufficient customer balance.",
+                        task_id=task_id,
+                        source_url=str(page.url),
+                        backend_id=BACKEND_ID,
+                        account_id=_.id,
+                        result_status="failed",
+                        result_description="Insufficient customer balance.",
+                        redeem_request_id=redeem_request_id,
+                        redeem_request_status="failed"
+                    )
                     return
                 elif "success" in text:
                     logger.info("Withdraw successful.")
-                    update_automation_result(task_id=task_id, status="success", description="Withdraw successful.")
-                    insert_log("info", f"Withdrawal successful for account: {account_id}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                    mark_redeem_request_status(redeem_request_id, "processed")
+                    insert_log_and_update_automation_result(
+                        log_type="info",
+                        log_description=f"Withdrawal successful for account: {account_id}",
+                        task_id=task_id,
+                        source_url=str(page.url),
+                        backend_id=BACKEND_ID,
+                        account_id=_.id,
+                        result_status="success",
+                        result_description="Withdraw successful.",
+                        redeem_request_id=redeem_request_id,
+                        redeem_request_status="processed"
+                    )
                 else:
                     logger.warning(f"Unexpected withdrawal response: {text}")
-                    update_automation_result(task_id=task_id, status="failed", description=f"Unexpected withdrawal response on {BACKEND_NAME}")
-                    mark_redeem_request_status(redeem_request_id, "failed")
-                    insert_log("warning", f"Unexpected withdrawal response: {text}", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+                    insert_log_and_update_automation_result(
+                        log_type="warning",
+                        log_description=f"Unexpected withdrawal response: {text}",
+                        task_id=task_id,
+                        source_url=str(page.url),
+                        backend_id=BACKEND_ID,
+                        account_id=_.id,
+                        result_status="failed",
+                        result_description="Unexpected withdrawal response.",
+                        redeem_request_id=redeem_request_id,
+                        redeem_request_status="failed"
+                    )
     except PlaywrightTimeoutError:
         logger.error("Failed to detect result dialog after account withdrawal.")
-        update_automation_result(task_id=task_id, status="failed", description=f"Failed to detect result after withdraw on {BACKEND_NAME}")
-        mark_redeem_request_status(redeem_request_id, "failed")
-        insert_log("warning", "Failed to detect dialog after account withdrawal", source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
+        insert_log_and_update_automation_result(
+            log_type="warning",
+            log_description="Failed to detect dialog after account withdrawal",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status="failed",
+            result_description=f"Failed to detect result after withdraw on {BACKEND_NAME}",
+            redeem_request_id=redeem_request_id,
+            redeem_request_status="failed"
+        )
 
 
 def _reset_password(page: Page, logger: logging.Logger, account_id, task_id):
@@ -613,23 +692,42 @@ def _reset_password(page: Page, logger: logging.Logger, account_id, task_id):
                 text = msg.inner_text().strip().lower()
                 if "success" in text:
                     logger.info("Password reset successful.")
-                    insert_log("info", description=f"Password reset successful for account {account_id}",
-                               source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                    update_automation_result(task_id=task_id, description="Password reset successful.", status="success",
-                                             data=json.dumps({"password": password}))
+                    insert_log_and_update_automation_result(
+                        log_type="info",
+                        log_description=f"Password reset successful for account {account_id}",
+                        task_id=task_id,
+                        source_url=str(page.url),
+                        backend_id=BACKEND_ID,
+                        account_id=_.id,
+                        result_status="success",
+                        result_description="Password reset successful.",
+                        result_data={"password": password}
+                    )
                     update_password_by_username(username=account_id, new_password=password)
                 else:
                     logger.warning(f"Password reset failed. Unhandled reset response: {text}")
-                    insert_log("error", description=f"Password reset failed. Unhandled reset response: {text}",
-                               source_url=str(page.url), backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-                    update_automation_result(task_id=task_id,
-                                             description=f"Password reset failed. Unhandled reset response: {text}",
-                                             status="failed")
+                    insert_log_and_update_automation_result(
+                        log_type="error",
+                        log_description=f"Password reset failed. Unhandled reset response: {text}",
+                        task_id=task_id,
+                        source_url=str(page.url),
+                        backend_id=BACKEND_ID,
+                        account_id=_.id,
+                        result_status="failed",
+                        result_description=f"Password reset failed. Unhandled reset response: {text}",
+                    )
     except PlaywrightTimeoutError:
         logger.warning("Password reset failed. Failed to detect result after reset")
-        insert_log("error", description="Failed to detect reset response", source_url=str(page.url),
-                   backend_id=BACKEND_ID, account_id=_.id, task_id=task_id)
-        update_automation_result(task_id=task_id, description="Failed to detect reset response", status="failed")
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description="Failed to detect reset response",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status="failed",
+            result_description="Failed to detect reset response",
+        )
 
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):
