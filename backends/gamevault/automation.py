@@ -244,124 +244,128 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
     except PlaywrightTimeoutError:
         pass
 
+    # Default outcome (unexpected)
+    log_type = "warning"
+    description = f"Unexpected recharge response on {BACKEND_NAME} - Wallet balance restored"
+    order_status = "failed"
+    automation_status = "failed"
+    automation_result_fields = {
+        "status": "failed",
+        "description": description,
+    }
+    wallet_status = "failed"
+    restore_wallet = True
+    amount_restore = amount_to_deduct
+    wallet_to_restore = wallet_id
+    should_process = False  # flag to determine whether to call process_recharge_operation
 
+    bonus_transferred = False
+
+    # Inspect all messages, but stop once a match is found
     messages = page.locator("p.el-message__content").all()
     for msg in messages:
-            text = msg.inner_text().strip().lower()
-            if "not enougn balance" in text:
-                logger.error("Recharge failed: backend balance insufficient.")
-                send_email(
-                    subject="Recharge failed",
-                    body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
-                )
-                process_recharge_operation(
-                    order_id=order_id,
-                    task_id=task_id,
-                    account_id=_.id,
-                    backend_id=BACKEND_ID,
-                    page_url=str(page.url),
-                    log_data={
-                        "type": "warning",
-                        "description": "Backend balance insufficient - Wallet balance restored"
-                    },
-                    order_status="failed",
-                    automation_status="failed",
-                    automation_result_fields={
-                        "status": "failed",
-                        "description": f"Insufficient backend balance for {BACKEND_NAME}"
-                    },
-                    wallet_status="failed",
-                    restore_wallet=True,
-                    amount_to_restore=amount_to_deduct,
-                    wallet_id=wallet_id
-                )
-                logger.info("Wallet balance restored")
-                return
-            elif "form is being submitted" in text:
-                logger.error("Recharge failed: form is being submitted.")
-                process_recharge_operation(
-                    order_id=order_id,
-                    task_id=task_id,
-                    account_id=_.id,
-                    backend_id=BACKEND_ID,
-                    page_url=str(page.url),
-                    log_data={
-                        "type": "warning",
-                        "description": f"Form submission error. Try again later - Wallet balance restored"
-                    },
-                    order_status="failed",
-                    automation_status="failed",
-                    automation_result_fields={
-                        "status": "failed",
-                        "description": f"Form submission error on {BACKEND_NAME}"
-                    },
-                    wallet_status="failed",
-                    restore_wallet=True,
-                    amount_to_restore=amount_to_deduct,
-                    wallet_id=wallet_id,
-                )
-                logger.info("Wallet balance restored")
-                return
-            elif "players can only deposit again after selecting whether or not to participate in the wager bonus program for the previous deposit !" in text:
-                logger.error("Recharge failed: Wager bonus error")
-                process_recharge_operation(
-                    order_id=order_id,
-                    task_id=task_id,
-                    account_id=_.id,
-                    backend_id=BACKEND_ID,
-                    page_url=str(page.url),
-                    log_data={
-                        "type": "warning",
-                        "description": "Wager bonus error - Wallet balance restored"
-                    },
-                    order_status="failed",
-                    automation_status="failed",
-                    automation_result_fields={
-                        "status": "failed",
-                        "description": "Wager Bonus error! User needs to resolve this"
-                    },
-                    wallet_status="failed",
-                    restore_wallet=True,
-                    amount_to_restore=amount_to_deduct,
-                    wallet_id=wallet_id,
-                )
-                logger.info("Wallet balance restored")
-                return
-            elif "success" in text:
-                logger.info("Recharge successful.")
-                process_recharge_operation(
-                    order_id=order_id,
-                    task_id=task_id,
-                    account_id=_.id,
-                    backend_id=BACKEND_ID,
-                    page_url=str(page.url),
-                    log_data={
-                        "type": "info",
-                        "description": f"Recharge successful for account: {account_id}"
-                    },
-                    order_status="finished",
-                    automation_status="finished",
-                    automation_result_fields={
-                        "status": "success",
-                        "description": "Recharge successful"
-                    },
-                    wallet_status="finished"
-                )
+        text = msg.inner_text().strip().lower()
+        if "not enougn balance" in text:
+            logger.error("Recharge failed: backend balance insufficient.")
+            send_email(
+                subject="Recharge failed",
+                body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
+            )
+            description = f"Backend balance insufficient for {BACKEND_NAME} - Wallet balance restored"
+            automation_result_fields = {
+                "status": "failed",
+                "description": description,
+            }
+            should_process = True
 
-                if _.user.bonus_received:
-                    mark_bonus_transferred(account_id)
-                return
+        elif "form is being submitted" in text:
+            logger.error("Recharge failed: form is being submitted.")
+            description = f"Form submission error on {BACKEND_NAME}. Try again later - Wallet balance restored"
+            automation_result_fields = {
+                "status": "failed",
+                "description": description,
+            }
+            should_process = True
 
+        elif "players can only deposit again after selecting whether or not to participate in the wager bonus program" in text:
+            logger.error("Recharge failed: Wager bonus error.")
+            description = f"Wager bonus error on {BACKEND_NAME} - Wallet balance restored"
+            automation_result_fields = {
+                "status": "failed",
+                "description": description,
+            }
+            should_process = True
 
-    # verify deposit
+        elif "success" in text:
+            logger.info("Recharge successful.")
+            log_type = "info"
+            description = f"Recharge successful for account: {account_id}"
+            order_status = "finished"
+            automation_status = "finished"
+            automation_result_fields = {
+                "status": "success",
+                "description": description,
+            }
+            wallet_status = "finished"
+            restore_wallet = False
+            amount_restore = None
+            wallet_to_restore = None
+            should_process = True
+
+            if _.user.bonus_received:
+                bonus_transferred = True
+
+        else:
+            logger.warning(f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored")
+            description = f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored"
+            automation_result_fields = {
+                "status": "success",
+                "description": description,
+            }
+            should_process = True
+
+        if should_process:
+            break  # stop after first relevant message
+
+    # Process if we found a message result
+    if should_process:
+        process_recharge_operation(
+            order_id=order_id,
+            task_id=task_id,
+            account_id=_.id,
+            backend_id=BACKEND_ID,
+            page_url=str(page.url),
+            log_data={
+                "type": log_type,
+                "description": description,
+            },
+            order_status=order_status,
+            automation_status=automation_status,
+            automation_result_fields=automation_result_fields,
+            wallet_status=wallet_status,
+            restore_wallet=restore_wallet,
+            amount_to_restore=amount_restore,
+            wallet_id=wallet_to_restore,
+            bonus_transferred=bonus_transferred,
+        )
+        # Stop further checks (deposit verification not needed)
+        return
+
+    # === Verify deposit if no message was decisive ===
     try:
         invoice = page.locator("#invoiceModel")
         invoice.wait_for(timeout=25000, state="visible")
+
         deposit = invoice.locator("p", has=page.locator("label", has_text="DEPOSIT:"))
-        deposit.wait_for(timeout=5_000, state="visible")
+        deposit.wait_for(timeout=5000, state="visible")
         txt = deposit.inner_text().strip().lower()
+
+        bonus_transferred = False
+
         if txt.startswith("deposit:") and any(ch.isdigit() for ch in txt):
             logger.info("Recharge successful.")
+            if _.user.bonus_received:
+                bonus_transferred = True
             process_recharge_operation(
                 order_id=order_id,
                 task_id=task_id,
@@ -378,13 +382,9 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
                     "status": "success",
                     "description": "Recharge successful"
                 },
-                wallet_status="finished"
+                wallet_status="finished",
+                bonus_transferred=bonus_transferred,
             )
-
-            if _.user.bonus_received:
-                mark_bonus_transferred(account_id)
-            return
-
 
         else:
             logger.warning(f"Unexpected recharge response: {txt}")
@@ -396,13 +396,13 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
                 page_url=str(page.url),
                 log_data={
                     "type": "warning",
-                    "description": f"Unexpected recharge response: {txt} - Wallet balance restored"
+                    "description": f"Unexpected recharge response: {txt} - Wallet balance restored",
                 },
                 order_status="failed",
                 automation_status="failed",
                 automation_result_fields={
                     "status": "failed",
-                    "description": f"Unexpected recharge response on {BACKEND_NAME}"
+                    "description": f"Unexpected recharge response on {BACKEND_NAME}",
                 },
                 wallet_status="failed",
                 restore_wallet=True,
@@ -410,6 +410,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
                 wallet_id=wallet_id,
             )
             logger.info("Wallet balance restored")
+
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         process_recharge_operation(
@@ -420,13 +421,13 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
             page_url=str(page.url),
             log_data={
                 "type": "warning",
-                "description": f"Failed to detect dialog after recharge for account: {account_id} -  Wallet balance restored"
+                "description": f"Failed to detect dialog after recharge for account: {account_id} - Wallet balance restored",
             },
             order_status="failed",
             automation_status="failed",
             automation_result_fields={
                 "status": "failed",
-                "description": f"Failed to detect result after recharge on {BACKEND_NAME}"
+                "description": f"Failed to detect result after recharge on {BACKEND_NAME}",
             },
             wallet_status="failed",
             restore_wallet=True,
@@ -592,6 +593,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, amount: int, account_i
 
     # verify withdraw
     try:
+        page.wait_for_selector("p.el-message__content", timeout=5000, state="attached")
         messages = page.locator("p.el-message__content").all()
         for msg in messages:
             if msg.is_visible():
@@ -686,6 +688,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id, task_id):
 
     page.wait_for_timeout(1000)
     try:
+        page.wait_for_selector("p.el-message__content", timeout=5000, state="attached")
         messages = page.locator("p.el-message__content").all()
         for msg in messages:
             if msg.is_visible():

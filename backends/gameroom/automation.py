@@ -250,49 +250,41 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
         result = withdraw_iframe.locator("div.layui-layer.layui-layer-dialog")
         result.wait_for(timeout=25000, state="visible")
         text = result.inner_text().strip().lower()
+
+        # Default values
+        log_type = "warning"
+        description = f"Unexpected withdrawal response: {text}"
+        result_status = "failed"
+        redeem_request_status = "failed"
+
         if "successful" in text:
             logger.info("Withdraw successful.")
-            insert_log_and_update_automation_result(
-                log_type="info",
-                log_description=f"Withdrawal successful for account: {account_id}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="success",
-                result_description="Withdraw successful.",
-                redeem_request_id=redeem_request_id,
-                redeem_request_status="processed"
-            )
+            log_type = "info"
+            description = f"Withdrawal successful for account: {account_id}"
+            result_status = "success"
+            redeem_request_status = "success"
         elif "withdrawal amount is greater than customer balance" in text:
             logger.error("Withdrawal failed due to insufficient gold.")
-            insert_log_and_update_automation_result(
-                log_type="warning",
-                log_description="Insufficient customer balance.",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="failed",
-                result_description="Insufficient customer balance.",
-                redeem_request_id=redeem_request_id,
-                redeem_request_status="failed"
-            )
-            return
+            log_type = "warning"
+            description = "Insufficient customer balance."
+            result_status = "failed"
+            redeem_request_status = "failed"
         else:
             logger.warning(f"Unexpected withdrawal response: {text}")
-            insert_log_and_update_automation_result(
-                log_type="warning",
-                log_description=f"Unexpected withdrawal response: {text}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="failed",
-                result_description="Unexpected withdrawal response.",
-                redeem_request_id=redeem_request_id,
-                redeem_request_status="failed"
-            )
+
+        insert_log_and_update_automation_result(
+            log_type=log_type,
+            log_description=description,
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status=result_status,
+            result_description=description,
+            redeem_request_id=redeem_request_id,
+            redeem_request_status=redeem_request_status
+        )
+
     except PlaywrightTimeoutError:
         logger.error("Failed to detect result dialog after account withdrawal.")
         insert_log_and_update_automation_result(
@@ -367,30 +359,42 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
         result = recharge_iframe.locator(ACCOUNT_RECHARGE_SUCCESS)
         result.wait_for(timeout=25000)
         text = result.inner_text().strip().lower()
+
+        # Default values
+        log_type = "warning"
+        description = f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored"
+        order_status = "failed"
+        automation_status = "failed"
+        automation_result_fields = {
+            "status": "failed",
+            "description": description,
+        }
+        wallet_status = "failed"
+        restore_wallet = True
+        amount_restore = amount_to_deduct
+        wallet_to_restore = wallet_id
+
+        bonus_transferred = False
+
+
         if "successful" in text:
             logger.info("Recharge successful.")
-            process_recharge_operation(
-                order_id=order_id,
-                task_id=task_id,
-                account_id=_.id,
-                backend_id=BACKEND_ID,
-                page_url=str(page.url),
-                log_data={
-                    "type": "info",
-                    "description": f"Recharge successful for account: {account_id}"
-                },
-                order_status="finished",
-                automation_status="finished",
-                automation_result_fields={
-                    "status": "success",
-                    "description": "Recharge successful"
-                },
-                wallet_status="finished"
-            )
+            log_type = "info"
+            description = f"Recharge successful for account: {account_id}"
+            order_status = "finished"
+            automation_status = "finished"
+            automation_result_fields = {
+                "status": "success",
+                "description": description
+            }
+            wallet_status = "finished"
+            restore_wallet = False
+            amount_restore = None
+            wallet_to_restore = None
             main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
 
             if _.user.bonus_received:
-                mark_bonus_transferred(account_id)
+                bonus_transferred = True
 
 
         elif "recharge balance is greater than available balance" in text:
@@ -399,53 +403,36 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                 subject="Recharge failed",
                 body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
             )
-            process_recharge_operation(
-                order_id=order_id,
-                task_id=task_id,
-                account_id=_.id,
-                backend_id=BACKEND_ID,
-                page_url=str(page.url),
-                log_data={
-                    "type": "warning",
-                    "description": "Backend balance insufficient - Wallet balance restored"
-                },
-                order_status="failed",
-                automation_status="failed",
-                automation_result_fields={
-                    "status": "failed",
-                    "description": f"Insufficient backend balance for {BACKEND_NAME}"
-                },
-                wallet_status="failed",
-                restore_wallet=True,
-                amount_to_restore=amount_to_deduct,
-                wallet_id=wallet_id
-            )
-            logger.info("Wallet balance restored")
-            return
+            description = f"Backend balance insufficient for {BACKEND_NAME} - Wallet balance restored"
+            automation_result_fields = {
+                "status": "failed",
+                "description": description
+            }
+
         else:
             logger.warning(f"Unexpected recharge response: {text}")
-            process_recharge_operation(
-                order_id=order_id,
-                task_id=task_id,
-                account_id=_.id,
-                backend_id=BACKEND_ID,
-                page_url=str(page.url),
-                log_data={
-                    "type": "warning",
-                    "description": f"Unexpected recharge response: {text} - Wallet balance restored"
-                },
-                order_status="failed",
-                automation_status="failed",
-                automation_result_fields={
-                    "status": "failed",
-                    "description": f"Unexpected recharge response on {BACKEND_NAME}"
-                },
-                wallet_status="failed",
-                restore_wallet=True,
-                amount_to_restore=amount_to_deduct,
-                wallet_id=wallet_id
-            )
-            logger.info("Wallet balance restored")
+
+
+        process_recharge_operation(
+            order_id=order_id,
+            task_id=task_id,
+            account_id=_.id,
+            backend_id=BACKEND_ID,
+            page_url=str(page.url),
+            log_data={
+                "type": log_type,
+                "description": description,
+            },
+            order_status=order_status,
+            automation_status=automation_status,
+            automation_result_fields=automation_result_fields,
+            wallet_status=wallet_status,
+            restore_wallet=restore_wallet,
+            amount_to_restore=amount_restore,
+            wallet_id=wallet_to_restore,
+            bonus_transferred=bonus_transferred,
+
+        )
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         process_recharge_operation(
@@ -500,18 +487,17 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
         result = recharge_iframe.locator(ACCOUNT_RECHARGE_SUCCESS)
         result.wait_for(timeout=25000)
         text = result.inner_text().strip().lower()
+
+        log_type = "warning"
+        description = f"Unexpected recharge response: {text} on {BACKEND_NAME}"
+        result_status = "failed"
+
         if "successful" in text:
             logger.info("Recharge successful.")
-            insert_log_and_update_automation_result(
-                log_type="info",
-                log_description=f"Freeplay Recharge successful for account: {account_id}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="success",
-                result_description="Freeplay Recharge successful",
-            )
+            log_type = "info"
+            description = f"Freeplay Recharge successful for account: {account_id}"
+            result_status = "success"
+
             process_freeplay_operation(
                 t=t,
                 username=account_id,
@@ -528,29 +514,21 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                 body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
             )
             logger.error("Recharge failed: backend balance insufficient.")
-            insert_log_and_update_automation_result(
-                log_type="warning",
-                log_description="Backend balance insufficient",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="failed",
-                result_description=f"Insufficient backend balance for {BACKEND_NAME}",
-            )
-            return
+            description = f"Backend balance insufficient for {BACKEND_NAME}"
+
         else:
             logger.warning(f"Unexpected recharge response: {text}")
-            insert_log_and_update_automation_result(
-                log_type="warning",
-                log_description=f"Unexpected recharge response: {text}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="failed",
-                result_description=f"Unexpected recharge response on {BACKEND_NAME}",
-            )
+
+        insert_log_and_update_automation_result(
+            log_type=log_type,
+            log_description=description,
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status=result_status,
+            result_description=description,
+        )
     except PlaywrightTimeoutError:
         logger.error("No recharge confirmation dialog appeared.")
         insert_log_and_update_automation_result(
@@ -592,32 +570,33 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
         result.wait_for(timeout=25000, state="visible")
         text = result.inner_text().strip().lower()
 
+        log_type = "warning"
+        description = f"Password reset failed. Unhandled reset response: {text} on {BACKEND_NAME}."
+        result_status = "failed"
+        result_data: dict | None = None
+
+
         if "reset successful" in text:
             logger.info("Password reset successful.")
-            insert_log_and_update_automation_result(
-                log_type="info",
-                log_description=f"Password reset successful for account {account_id}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="success",
-                result_description="Password reset successful.",
-                result_data={"password": password}
-            )
+            log_type = "info"
+            description = f"Password reset successful for account: {account_id}"
+            result_status = "success"
+            result_data = {"password": password}
             update_password_by_username(username=account_id, new_password=password)
         else:
             logger.warning(f"Password reset failed. Unhandled reset response: {text}")
-            insert_log_and_update_automation_result(
-                log_type="error",
-                log_description=f"Password reset failed. Unhandled reset response: {text}",
-                task_id=task_id,
-                source_url=str(page.url),
-                backend_id=BACKEND_ID,
-                account_id=_.id,
-                result_status="failed",
-                result_description=f"Password reset failed. Unhandled reset response: {text}",
-            )
+
+        insert_log_and_update_automation_result(
+            log_type=log_type,
+            log_description=description,
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=BACKEND_ID,
+            account_id=_.id,
+            result_status=result_status,
+            result_description=description,
+            result_data=result_data,
+        )
     except PlaywrightTimeoutError:
         logger.warning("Password reset failed. Failed to detect result after reset")
         insert_log_and_update_automation_result(
