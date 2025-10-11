@@ -517,10 +517,21 @@ def process_recharge_operation(
     restore_wallet: bool = False,
     amount_to_restore: int = None,
     wallet_id: int = None,
+    bonus_transferred: bool = False,
 ):
     db = SessionLocal()
     try:
         results = {}
+
+        if bonus_transferred:
+            backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
+                BackendAccount.id == account_id,
+                BackendAccount.deleted_at == None
+            ).first()
+
+            if backend_account and backend_account.user:
+                backend_account.user.bonus_transferred = True
+            results["backend_account"] = backend_account
 
         if restore_wallet:
             wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
@@ -657,9 +668,11 @@ def insert_log_and_update_automation_result(
     backend_id=None,
     source_url=None,
     account_id=None,
-    new_status=None,
-    new_description=None,
-    new_data=None,
+    result_status=None,
+    result_description=None,
+    result_data=None,
+    redeem_request_id=None,
+    redeem_request_status=None,
 ):
     db = SessionLocal()
     try:
@@ -672,20 +685,20 @@ def insert_log_and_update_automation_result(
         )
 
         if result:
-            if new_status:
-                result.status = new_status
-            if new_description:
-                result.description = new_description
-            if new_data:
-                result.data = json.dumps(new_data)
+            if result_status:
+                result.status = result_status
+            if result_description:
+                result.description = result_description
+            if result_data:
+                result.data = json.dumps(result_data)
         else:
             # Optionally: create one if not exists
             result = AutomationResult(
                 task_id=task_id,
                 backend_id=backend_id,
-                status=new_status or "pending",
-                description=new_description,
-                data=new_data,
+                status=result_status or "pending",
+                description=result_description,
+                data=json.dumps(result_data),
             )
             db.add(result)
 
@@ -700,6 +713,14 @@ def insert_log_and_update_automation_result(
         )
         db.add(log)
 
+        if redeem_request_id and redeem_request_status:
+            redeem_request = (
+                db.query(RedeemRequest)
+                .filter(RedeemRequest.id == redeem_request_id)
+                .one_or_none()
+            )
+            if redeem_request:
+                redeem_request.status = redeem_request_status
         # 3. Commit transaction
         db.commit()
 
@@ -714,6 +735,7 @@ def insert_log_and_update_automation_result(
         raise
     finally:
         db.close()
+
 
 
 def update_freeplay(idx, status):
@@ -731,3 +753,89 @@ def update_freeplay(idx, status):
         return False
     finally:
         db.close()
+
+def process_freeplay_operation(
+    t: str,
+    username: str = None,
+    account_id: str = None,
+    id_to_update: int = None,
+    freeplay_id: int = None,
+    backend_id: int = None,
+    task_id: int = None
+) -> bool:
+    """
+    Unified handler for freeplay-related operations.
+    Handles:
+      - signup_freeplay  → mark user.freeplay_transferred = True
+      - referral_freeplay → mark ReferralBonus as claimed
+      - reward_freeplay   → mark WheelSpin as success
+
+    Uses a single DB session and inserts a Log record only if an error occurs.
+    """
+    db = SessionLocal()
+    try:
+        if t == "signup_freeplay":
+            backend_account = (
+                db.query(BackendAccount)
+                .options(joinedload(BackendAccount.user))
+                .filter(
+                    BackendAccount.username == username,
+                    BackendAccount.deleted_at == None
+                )
+                .first()
+            )
+
+            if not backend_account or not backend_account.user:
+                raise ValueError(f"BackendAccount not found for account_id={username}")
+
+            backend_account.user.freeplay_transferred = True
+
+        elif t == "referral_freeplay":
+            referral_bonus = db.query(ReferralBonus).filter(ReferralBonus.id == id_to_update).first()
+            if not referral_bonus:
+                raise ValueError(f"ReferralBonus not found for id={id_to_update}")
+
+            referral_bonus.status = "claimed"
+            referral_bonus.claimed_at = func.now()
+
+        elif t == "reward_freeplay":
+            spin = db.query(WheelSpin).filter(WheelSpin.id == id_to_update).first()
+            if not spin:
+                raise ValueError(f"WheelSpin not found for id={id_to_update}")
+
+            spin.status = "success"
+
+        else:
+            raise ValueError(f"Unknown freeplay operation type: '{t}'")
+
+        freeplay = db.query(Freeplay).filter(Freeplay.id == freeplay_id).first()
+        if not freeplay:
+            raise ValueError(f"Freeplay not found for id={freeplay_id}")
+        freeplay.status = "success"
+
+        db.commit()
+        return True
+
+    except Exception as e:
+        db.rollback()
+
+        # Insert log directly using the same session
+        try:
+            error_log = Log(
+                type="error",
+                description=f"<DATABASE ERROR>Error processing freeplay operation '{t}': {str(e)}",
+                backend_id=backend_id,
+                account_id=account_id,
+                task_id=task_id,
+            )
+            db.add(error_log)
+            db.commit()  # commit log separately
+        except Exception as log_ex:
+            db.rollback()
+            print(f"Failed to write error log: {log_ex}")
+
+        return False
+
+    finally:
+        db.close()
+

@@ -257,7 +257,7 @@ async def read_account(
         queue_kwargs={"account_id": req.account_id},
         request_type="read",
         payload=req.dict(),
-        user_id=None,
+        user_id=current_user.id,
     )
 
 
