@@ -198,7 +198,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
         if "successful" in result:
             logger.info("Recharge successful.")
-            log_type = "success"
+            log_type = "info"
             description = f"Recharge successful for account {account_id}"
             order_status = "finished"
             automation_status = "finished"
