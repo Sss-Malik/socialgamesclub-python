@@ -616,12 +616,16 @@ def action_create_account(page: Page, task_id, backend):
             subject="Account creation failed",
             body=f"Critical error occurred during account creation for backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account creation: {e}",
-            source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account creation: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend.id,
+            result_status="failed",
+            result_description=f"Error during account creation: {e}",
+            screenshot_url=screenshot_url
         )
-        update_automation_result(task_id=task_id, description=f"Account creation failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
@@ -657,12 +661,17 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             subject="Account recharge failed",
             body=f"Critical error occurred during account recharge for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account recharge: {e}",
-            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend_game.id,
+            result_status="failed",
+            result_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            screenshot_url=screenshot_url,
+            account_id=backend_account.id,
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
@@ -696,12 +705,17 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
             subject="Account recharge failed",
             body=f"Critical error occurred during freeplay recharge for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account recharge: {e}",
-            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account freeplay recharge: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend_game.id,
+            result_status="failed",
+            result_description=f"Error during account freeplay recharge: {e}",
+            screenshot_url=screenshot_url,
+            account_id=backend_account.id,
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account recharge failed. {e}", screenshot_url=screenshot_url)
     finally:
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
@@ -736,12 +750,17 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             subject="Account withdrawal failed",
             body=f"Critical error occurred during account withdrawal for account ID {account_id} on backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account withdrawal: {e}",
-            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account withdrawal: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend_game.id,
+            result_status="failed",
+            result_description=f"Error during account withdrawal: {e}",
+            screenshot_url=screenshot_url,
+            account_id=backend_account.id,
         )
-        update_automation_result(task_id=task_id, status="failed", description=f"Account withdrawal failed. {e}", screenshot_url=screenshot_url)
     finally:
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
@@ -774,12 +793,17 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
             subject="Account read failed",
             body=f"Critical error occurred during reading account {account_id} on backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account read: {e}",
-            source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account read: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend_game.id,
+            result_status="failed",
+            result_description=f"Error during account read: {e}",
+            screenshot_url=screenshot_url,
+            account_id=backend_account.id,
         )
-        update_automation_result(task_id=task_id, description=f"Account read failed. {e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
@@ -814,14 +838,17 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
             subject="Account password reset failed",
             body=f"Critical error occurred during reset password for {account_id} on backend '{BACKEND_NAME}'. Please review",
         )
-        insert_log(
-            "error",
-            f"Error during account password reset: {e}",
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account password reset: {e}",
+            task_id=task_id,
             source_url=str(page.url),
             backend_id=backend_game.id,
-            account_id=backend_account.id, task_id=task_id
+            result_status="failed",
+            result_description=f"Error during account password reset: {e}",
+            screenshot_url=screenshot_url,
+            account_id=backend_account.id,
         )
-        update_automation_result(task_id=task_id, description=f"Error during account password reset.{e}", status="failed", screenshot_url=screenshot_url)
     finally:
         logger.info("Reset-password action completed.")
         insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
