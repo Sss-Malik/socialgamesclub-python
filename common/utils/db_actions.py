@@ -669,6 +669,7 @@ def insert_log_and_update_automation_result(
     source_url=None,
     account_id=None,
     result_status=None,
+    screenshot_url=None,
     result_description=None,
     result_data=None,
     redeem_request_id=None,
@@ -691,6 +692,8 @@ def insert_log_and_update_automation_result(
                 result.description = result_description
             if result_data:
                 result.data = json.dumps(result_data)
+            if screenshot_url:
+                result.screenshot_url = screenshot_url
         else:
             # Optionally: create one if not exists
             result = AutomationResult(
@@ -698,6 +701,7 @@ def insert_log_and_update_automation_result(
                 backend_id=backend_id,
                 status=result_status or "pending",
                 description=result_description,
+                screenshot_url=screenshot_url,
                 data=json.dumps(result_data),
             )
             db.add(result)
