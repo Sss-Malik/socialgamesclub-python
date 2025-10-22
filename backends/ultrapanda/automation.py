@@ -70,6 +70,12 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             page.goto(backend.backend_url, wait_until="domcontentloaded")
 
+            try:
+                page.wait_for_selector('div[role="dialog"][aria-label="announcement"]', timeout=5000)
+                page.locator('div[role="dialog"][aria-label="announcement"] button:has-text("confirm")').click()
+            except PlaywrightTimeoutError:
+                pass
+
             username = backend.username or USERNAME
             password = backend.password or PASSWORD
 
@@ -966,7 +972,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
