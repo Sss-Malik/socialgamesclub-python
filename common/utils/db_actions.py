@@ -674,6 +674,10 @@ def insert_log_and_update_automation_result(
     result_data=None,
     redeem_request_id=None,
     redeem_request_status=None,
+    order_id=None,
+    wallet_detail_status=None,
+    add_to_wallet=None,
+    add_to_wallet_amount=None
 ):
     db = SessionLocal()
     try:
@@ -725,6 +729,17 @@ def insert_log_and_update_automation_result(
             )
             if redeem_request:
                 redeem_request.status = redeem_request_status
+
+            if order_id and wallet_detail_status:
+                wallet_detail = db.query(WalletDetail).filter(WalletDetail.order_id == order_id).first()
+                if wallet_detail:
+                    wallet_detail.status = wallet_detail_status
+
+                if add_to_wallet:
+                    wallet = wallet_detail.wallet
+                    if wallet:
+                        wallet.balance_minor += add_to_wallet_amount
+
         # 3. Commit transaction
         db.commit()
 

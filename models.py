@@ -309,6 +309,7 @@ class WalletMaster(Base):
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=True)
     user = relationship("User", back_populates="wallet_master", uselist=False)
 
+    wallet_details = relationship("WalletDetail", back_populates="wallet")
 
 class WalletDetail(Base):
     __tablename__ = "wallet_detail"
@@ -322,7 +323,7 @@ class WalletDetail(Base):
     actually_paid = Column(DECIMAL(10, 6), nullable=True)
     outcome_price = Column(DECIMAL(10, 6), nullable=True)
     type = Column(
-        Enum("DEPOSIT", "LOAD_TO_GAME", name="transaction_type"),
+        Enum("DEPOSIT", "LOAD_TO_GAME", "REDEEM_TO_WALLET", "WALLET_WITHDRAW", name="transaction_type"),
         nullable=False
     )
     method = Column(String(24), nullable=True)
@@ -340,6 +341,8 @@ class WalletDetail(Base):
     screenshot = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
     updated_at = Column(TIMESTAMP, nullable=True)
+
+    wallet = relationship("WalletMaster", back_populates="wallet_details")
 
 
 class Freeplay(Base):

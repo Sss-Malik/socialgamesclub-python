@@ -205,6 +205,8 @@ async def recharge_account(
 @app.post("/automation/withdraw-account")
 async def withdraw_account(
     req: WithdrawAccountRequest,
+    x_order_id: Optional[str] = Header(None),
+    _: bool = Depends(require_app_key)
 ):
     # Keep same behavior: no APP_KEY check and use redeem_id from payload
     return _enqueue_action(
@@ -215,6 +217,8 @@ async def withdraw_account(
             "account_id": req.account_id,
             "count": req.count,
             "redeem_request_id": req.redeem_id,
+            "order_id": x_order_id,
+            "requested_amount": req.requested_amount,
         },
         request_type="withdraw",
         payload=req.dict(),
