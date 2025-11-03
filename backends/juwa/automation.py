@@ -419,7 +419,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Account read data: {data}")
 
 
-def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id):
+def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id: str, task_id, redeem_request_id, order_id, requested_amount):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={count}")
     _ = get_backend_account(account_id)
 
@@ -469,7 +469,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                         result_status="failed",
                         result_description="Insufficient customer balance.",
                         redeem_request_id=redeem_request_id,
-                        redeem_request_status="failed"
+                        redeem_request_status="failed",
+                        order_id=order_id,
+                        wallet_detail_status="failed",
+                        add_to_wallet=False
                     )
                     return
                 if "success" in text:
@@ -484,7 +487,11 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                         result_status="success",
                         result_description="Withdraw successful.",
                         redeem_request_id=redeem_request_id,
-                        redeem_request_status="processed"
+                        redeem_request_status="processed",
+                        order_id=order_id,
+                        wallet_detail_status="finished",
+                        add_to_wallet=True,
+                        add_to_wallet_amount=requested_amount,
                     )
                 else:
                     logger.warning(f"Unexpected withdrawal response: {text}")
@@ -498,7 +505,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
                         result_status="failed",
                         result_description="Unexpected withdrawal response.",
                         redeem_request_id=redeem_request_id,
-                        redeem_request_status="failed"
+                        redeem_request_status="failed",
+                        order_id=order_id,
+                        wallet_detail_status="failed",
+                        add_to_wallet=False
                     )
     except PlaywrightTimeoutError:
         insert_log_and_update_automation_result(
@@ -511,7 +521,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             result_status="failed",
             result_description=f"Failed to detect result after withdraw on {BACKEND_NAME}",
             redeem_request_id=redeem_request_id,
-            redeem_request_status="failed"
+            redeem_request_status="failed",
+            order_id=order_id,
+            wallet_detail_status="failed",
+            add_to_wallet=False
         )
         logger.error("Failed to detect result dialog after account withdrawal.")
 
@@ -738,7 +751,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
 
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id, order_id, requested_amount):
     backend_game, backend_account = get_backend_and_account(backend, account_id)
 
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -752,7 +765,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         _login_and_navigate(page, logger, backend_game, task_id)
-        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
+        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id, order_id, requested_amount)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,

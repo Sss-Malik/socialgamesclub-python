@@ -538,7 +538,7 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
         logger.info(f"Account read data: {data}")
         break
 
-def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_id: str, task_id, redeem_request_id):
+def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_id: str, task_id, redeem_request_id, order_id, requested_amount):
     logger.info(f"Initiating withdrawal: account_id={account_id}, amount={points}")
     _ = get_backend_account(account_id)
 
@@ -600,6 +600,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             result_status = "failed"
             redeem_request_status = "failed"
 
+            wallet_detail_status = "failed"
+            add_to_wallet = False
+            add_to_wallet_amount = requested_amount
+
             if "cannot exceed current points" in text:
                 logger.error("Withdrawal failed due to insufficient gold.")
                 description = "Insufficient customer balance."
@@ -610,6 +614,9 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 description = f"Withdrawal successful for account: {account_id}"
                 result_status = "success"
                 redeem_request_status = "processed"
+
+                wallet_detail_status = "finished"
+                add_to_wallet = True
             else:
                 logger.warning(f"Unexpected withdrawal response: {text}")
 
@@ -623,7 +630,11 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 result_status=result_status,
                 result_description=description,
                 redeem_request_id=redeem_request_id,
-                redeem_request_status=redeem_request_status
+                redeem_request_status=redeem_request_status,
+                order_id=order_id,
+                wallet_detail_status=wallet_detail_status,
+                add_to_wallet=add_to_wallet,
+                add_to_wallet_amount=add_to_wallet_amount,
             )
         except PlaywrightTimeoutError:
             logger.exception("No dialog appeared after setting score.")
@@ -637,7 +648,10 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 result_status="failed",
                 result_description=f"Failed to detect result after withdraw on {BACKEND_NAME}",
                 redeem_request_id=redeem_request_id,
-                redeem_request_status="failed"
+                redeem_request_status="failed",
+                order_id=order_id,
+                wallet_detail_status="failed",
+                add_to_wallet=False,
             )
         break
 
@@ -900,7 +914,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
 
 
 @with_persistent_browser
-def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id):
+def action_withdraw_account(page: Page, count: int, account_id: str, task_id, backend, redeem_request_id, order_id, requested_amount):
     backend_game, backend_account = get_backend_and_account(backend, account_id)
 
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -918,7 +932,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
             increment_active_tasks_count(session.id)
-        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id)
+        _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id, order_id, requested_amount)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
