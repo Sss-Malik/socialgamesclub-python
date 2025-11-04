@@ -372,10 +372,10 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
                         task_id=task_id,
                     )
                 else:
-                    logger.warning(f"Unexpected recharge response: {msg}")
+                    logger.warning(f"Unexpected recharge response: {text}")
                     insert_log_and_update_automation_result(
                         log_type="warning",
-                        log_description=f"Unexpected recharge response: {msg}",
+                        log_description=f"Unexpected recharge response: {text}",
                         task_id=task_id,
                         source_url=str(page.url),
                         backend_id=BACKEND_ID,
