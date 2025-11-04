@@ -245,7 +245,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                         mark_bonus_transferred(account_id)
 
                 else:
-                    logger.warning(f"Unexpected recharge response: {msg}")
+                    logger.warning(f"Unexpected recharge response: {text}")
                     process_recharge_operation(
                         order_id=order_id,
                         task_id=task_id,
@@ -254,7 +254,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
                         page_url=str(page.url),
                         log_data={
                             "type": "warning",
-                            "description": f"Unexpected recharge response: {msg} - Wallet balance restored"
+                            "description": f"Unexpected recharge response: {text} - Wallet balance restored"
                         },
                         order_status="failed",
                         automation_status="failed",
