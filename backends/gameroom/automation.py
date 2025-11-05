@@ -266,7 +266,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, count: int, account_id
             log_type = "info"
             description = f"Withdrawal successful for account: {account_id}"
             result_status = "success"
-            redeem_request_status = "success"
+            redeem_request_status = "processed"
 
             wallet_detail_status = "finished"
             add_to_wallet = True
