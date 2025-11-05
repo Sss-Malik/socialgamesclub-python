@@ -764,10 +764,6 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
             result_description=f"Error during account withdrawal: {e}",
             screenshot_url=screenshot_url,
             account_id=backend_account.id,
-            redeem_request_id=redeem_request_id,
-            redeem_request_status="failed",
-            order_id=order_id,
-            wallet_detail_status="failed"
         )
 
     finally:
