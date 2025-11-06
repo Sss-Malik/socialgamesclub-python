@@ -5,6 +5,7 @@ from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, 
     WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
+from fastapi.encoders import jsonable_encoder
 
 def get_backend(name):
     db = SessionLocal()
@@ -641,7 +642,7 @@ def insert_automation_result_and_request(
         request = AutomationRequest(
             task_id=task_id,
             type=request_type,
-            payload=payload,
+            payload=jsonable_encoder(payload),
             status_code=status_code,
         )
 
