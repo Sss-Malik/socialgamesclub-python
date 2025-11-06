@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from decimal import Decimal
 
 class CreateAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")
@@ -14,7 +15,7 @@ class WithdrawAccountRequest(BaseModel):
     count: int = Field(1, example=50)
     account_id: str = Field(..., example="abc123")
     redeem_id: int = Field(..., example=123)
-    requested_amount: float = Field(..., example=50)
+    requested_amount: Decimal = Field(..., example=50)
 
 class ReadAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")
