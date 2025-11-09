@@ -411,8 +411,8 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
         "account_number": row.locator("td:nth-child(2) span.label").inner_text().strip(),
         "username_notes": row.locator("td:nth-child(4)").inner_text().strip(),
         "created": row.locator("td:nth-child(5)").inner_text().strip(),
-        "balance": row.locator("td:nth-child(6) code[rel='balance']").inner_text().strip(),
-        "total_wins": row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip(),
+        "balance": row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip(), # changed from balance -> total_wins
+        # "total_wins": row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip(),
         "state": row.locator("td:nth-child(7) span[rel='online']").inner_text().strip(),
     }
 
