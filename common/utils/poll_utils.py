@@ -1,6 +1,7 @@
 import time
 from common.utils.db_actions import get_latest_valid_session, get_session
 from db import SessionLocal
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 def wait_for_valid_session(backend, logger, timeout=30, interval=3):
     """
@@ -23,7 +24,7 @@ import time
 import logging
 
 
-def wait_for_active_tasks_to_zero(session_id: int, max_wait_seconds: int = 40, poll_interval: int = 2,
+def wait_for_active_tasks_to_zero(session_id: int, page: Page, max_wait_seconds: int = 40, poll_interval: int = 2,
                                   logger: logging.Logger = None) -> bool:
     db = SessionLocal()
     try:
@@ -42,7 +43,7 @@ def wait_for_active_tasks_to_zero(session_id: int, max_wait_seconds: int = 40, p
                 return True
             if logger:
                 logger.warning("Session is currently in use. Waiting for free session...")
-            time.sleep(poll_interval)
+            page.wait_for_timeout(poll_interval)
             waited += poll_interval
         if logger:
             logger.warning(f"Timeout reached waiting for session {session_id} to become free.")
