@@ -50,7 +50,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             return session
         else:
             logger.warning("Session injection failed. Invalidating session.")
-            if wait_for_active_tasks_to_zero(session.id, logger=logger):
+            if wait_for_active_tasks_to_zero(session.id, page, logger=logger):
                 logger.info("Session is now free, invalidating it.")
                 invalidate_latest_session(backend.name)
             else:
