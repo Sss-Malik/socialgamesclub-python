@@ -60,7 +60,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
         else:
             logger.warning("Session injection failed. Invalidating session.")
-            if wait_for_active_tasks_to_zero(session.id, logger=logger):
+            if wait_for_active_tasks_to_zero(session.id, page, logger=logger):
                 logger.info("Session is now free, invalidating it.")
                 invalidate_latest_session(backend.name)
             else:
@@ -76,6 +76,19 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.info("Lock acquired. Proceeding with login.")
 
             page.goto(backend.backend_url, wait_until="domcontentloaded")
+
+            # --- Handle possible announcement modal ---
+            try:
+                # Wait for announcement modal to appear (up to 5 seconds)
+                dialog = page.locator('div[role="dialog"][aria-label="announcement"]')
+                dialog.wait_for(state="visible", timeout=5000)
+                logger.info("Announcement modal detected.")
+                confirm_btn = dialog.locator('button.el-button.notice-btn')
+                if confirm_btn.is_visible():
+                    confirm_btn.click()
+                    logger.info("Announcement modal closed via confirm button.")
+            except PlaywrightTimeoutError:
+                logger.info(f"No announcement modal or error while handling it")
 
             username = backend.username or USERNAME
             password = backend.password or PASSWORD
