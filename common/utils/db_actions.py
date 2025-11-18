@@ -488,13 +488,19 @@ def deduct_wallet_balance(wallet_id, deduct_amount):
         db.close()
 
 
-def restore_wallet_balance(wallet_id, restore_amount):
+def restore_wallet_balance(wallet_id, restore_amount, order_id):
     db = SessionLocal()
+    status = "refunded"
     try:
         wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
         if wallet:
             wallet.balance_minor = wallet.balance_minor + restore_amount
-            db.commit()
+
+        wallet_detail = db.query(WalletDetail).filter(WalletDetail.wallet_id == wallet_id, WalletDetail.order_id == order_id).first()
+        if wallet_detail:
+            wallet_detail.status = status
+
+        db.commit()
     except Exception as e:
         db.rollback()
     finally:

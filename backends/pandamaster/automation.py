@@ -647,7 +647,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         _login_and_navigate(page, logger, backend_game, task_id)
         _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct)
     except (PlaywrightTimeoutError, Exception) as e:
-        restore_wallet_balance(wallet_id, amount_to_deduct)
+        restore_wallet_balance(wallet_id, amount_to_deduct, order_id)
         insert_log("info", "Critical error during account recharge - Wallet balance restored", source_url=str(page.url),
                    backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
         screenshot_url = capture_and_upload_screenshot(
@@ -664,12 +664,12 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         insert_log_and_update_automation_result(
             log_type="error",
-            log_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            log_description=f"WALLET_RESTORED - Error during account recharge: {e}",
             task_id=task_id,
             source_url=str(page.url),
             backend_id=backend_game.id,
             result_status="failed",
-            result_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            result_description=f"WALLET_RESTORED - Error during account recharge: {e}",
             screenshot_url=screenshot_url,
             account_id=backend_account.id,
         )
