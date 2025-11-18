@@ -823,12 +823,12 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         insert_log_and_update_automation_result(
             log_type="error",
-            log_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            log_description=f"WALLET_RESTORED - Error during account recharge: {e}",
             task_id=task_id,
             source_url=str(page.url),
             backend_id=backend_game.id,
             result_status="failed",
-            result_description=f"<WALLET_RESTORED> - Error during account recharge: {e}",
+            result_description=f"WALLET_RESTORED - Error during account recharge: {e}",
             screenshot_url=screenshot_url,
             account_id=backend_account.id,
         )
