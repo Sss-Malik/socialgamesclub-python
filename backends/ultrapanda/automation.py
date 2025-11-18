@@ -36,6 +36,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         if validate_session_token(page, logger):
             logger.info("Session injection and validation successful")
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
+
+            try:
+                snippet_text = "Your account was logged in from a different location"
+
+                # Locate the dialog containing this text
+                dialog_locator = page.locator(f'div[role="dialog"]:has-text("{snippet_text}")')
+                dialog_locator.wait_for(state="visible", timeout=5000)
+
+                # Click the confirm button inside this specific dialog
+                confirm_button = dialog_locator.locator('button:has-text("confirm")')
+                confirm_button.click()
+                logger.info("login warning resolved")
+            except PlaywrightTimeoutError:
+                logger.info("login warning pass")
+
             try:
                 dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
                 dialog.wait_for(state="visible", timeout=5000)
@@ -118,6 +133,20 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 logger.debug("google auth OK button clicker")
             except PlaywrightTimeoutError:
                 pass
+
+            try:
+                snippet_text = "Your account was logged in from a different location"
+
+                # Locate the dialog containing this text
+                dialog_locator = page.locator(f'div[role="dialog"]:has-text("{snippet_text}")')
+                dialog_locator.wait_for(state="visible", timeout=5000)
+
+                # Click the confirm button inside this specific dialog
+                confirm_button = dialog_locator.locator('button:has-text("confirm")')
+                confirm_button.click()
+                logger.info("login warning resolved")
+            except PlaywrightTimeoutError:
+                logger.info("login warning pass")
 
 
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
