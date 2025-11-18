@@ -708,7 +708,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             increment_active_tasks_count(session.id)
         _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct)
     except (PlaywrightTimeoutError, Exception) as e:
-        restore_wallet_balance(wallet_id, amount_to_deduct)
+        restore_wallet_balance(wallet_id, amount_to_deduct, order_id)
         screenshot_url = capture_and_upload_screenshot(
             page=page,
             backend=backend_game.name,
