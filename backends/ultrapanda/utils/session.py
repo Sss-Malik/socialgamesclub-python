@@ -13,20 +13,21 @@ def inject_session_token(page, token):
 
 
 def validate_session_token(page, logger) -> bool | None:
-    try:
-        page.locator("p.el-message__content").first.wait_for(state="attached", timeout=1000)
-        messages = page.locator("p.el-message__content").all()
-        for message in messages:
-            text = message.inner_text().strip().lower()
+    msg_locator = page.locator("p.el-message__content")
+
+    if msg_locator.count() > 0:
+        for item in msg_locator.all():
+            text = item.inner_text().strip().lower()
             if "error: 52, no restriciton" in text or "您的账号已在其它设备登录" in text:
-                page.wait_for_timeout(2000)
+                logger.debug("Session invalid warning detected")
                 return False
 
-        timeout_box = page.locator("div.el-message-box__message p")
-        timeout_box.wait_for(state="visible", timeout=2000)
+    timeout_box = page.locator("div.el-message-box__message p")
+    if timeout_box.is_visible(timeout=2000):
         text = timeout_box.inner_text().strip().lower()
         if "browser timeout" in text or "log in again" in text:
+            logger.debug("Session invalid warning detected")
             return False
-        return None
-    except PlaywrightTimeoutError:
-        return True
+
+    return True
+
