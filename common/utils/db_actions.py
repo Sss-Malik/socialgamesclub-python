@@ -530,16 +530,14 @@ def process_recharge_operation(
     db = SessionLocal()
     try:
         results = {}
-
-        if bonus_transferred:
-            backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
-                BackendAccount.id == account_id,
-                BackendAccount.deleted_at == None
-            ).first()
-
-            if backend_account and backend_account.user:
+        backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
+            BackendAccount.id == account_id,
+            BackendAccount.deleted_at == None
+        ).first()
+        if backend_account and backend_account.user:
+            if bonus_transferred:
                 backend_account.user.bonus_transferred = True
-            results["backend_account"] = backend_account
+        results["backend_account"] = backend_account
 
         if restore_wallet:
             wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
