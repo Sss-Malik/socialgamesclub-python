@@ -1,5 +1,6 @@
 import json
 
+from common.utils.notify import serialize_model, notify_webhook_async
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
     WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay
@@ -529,16 +530,14 @@ def process_recharge_operation(
     db = SessionLocal()
     try:
         results = {}
-
-        if bonus_transferred:
-            backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
-                BackendAccount.id == account_id,
-                BackendAccount.deleted_at == None
-            ).first()
-
-            if backend_account and backend_account.user:
+        backend_account = db.query(BackendAccount).options(joinedload(BackendAccount.user)).filter(
+            BackendAccount.id == account_id,
+            BackendAccount.deleted_at == None
+        ).first()
+        if backend_account and backend_account.user:
+            if bonus_transferred:
                 backend_account.user.bonus_transferred = True
-            results["backend_account"] = backend_account
+        results["backend_account"] = backend_account
 
         if restore_wallet:
             wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
@@ -591,6 +590,8 @@ def process_recharge_operation(
         for obj in results.values():
             db.refresh(obj)
 
+        serializable_results = {k: serialize_model(v) for k, v in results.items()}
+        notify_webhook_async(serializable_results, request_type="recharge")
         return results
 
     except Exception:
@@ -688,6 +689,7 @@ def insert_log_and_update_automation_result(
 ):
     db = SessionLocal()
     try:
+        results = {}
         # 1. Update the AutomationResult (if exists)
         result = (
             db.query(AutomationResult)
@@ -716,6 +718,7 @@ def insert_log_and_update_automation_result(
                 data=json.dumps(result_data),
             )
             db.add(result)
+        results["automation_result"] = result
 
         # 2. Always add a new Log
         log = Log(
@@ -727,6 +730,7 @@ def insert_log_and_update_automation_result(
             account_id=account_id,
         )
         db.add(log)
+        results["log"] = log
 
         if redeem_request_id and redeem_request_status:
             redeem_request = (
@@ -736,25 +740,31 @@ def insert_log_and_update_automation_result(
             )
             if redeem_request:
                 redeem_request.status = redeem_request_status
+                results["redeem_request"] = redeem_request
 
             if order_id and wallet_detail_status:
                 wallet_detail = db.query(WalletDetail).filter(WalletDetail.order_id == order_id).first()
                 if wallet_detail:
                     wallet_detail.status = wallet_detail_status
+                    results["wallet_detail"] = wallet_detail
 
                 if add_to_wallet:
                     wallet = wallet_detail.wallet
                     if wallet:
                         wallet.balance_minor += add_to_wallet_amount
+                        results["wallet"] = wallet
 
         # 3. Commit transaction
         db.commit()
 
         # refresh objects if you want to return them
-        db.refresh(result)
-        db.refresh(log)
+        for obj in results.values():
+            db.refresh(obj)
 
-        return result, log
+        if redeem_request_id:
+            serializable_results = {k: serialize_model(v) for k, v in results.items()}
+            notify_webhook_async(serializable_results, request_type="redeem")
+        return results
 
     except Exception:
         db.rollback()

@@ -52,3 +52,6 @@ WORDS_FOR_PASSWORD = [
     "thunder", "desert", "valley", "island", "planet", "stream", "meadow", "horizon", "tunnel", "harbor",
     "table", "phone", "marker", "plane", "console"
 ]
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
