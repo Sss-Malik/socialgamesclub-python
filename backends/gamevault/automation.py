@@ -88,7 +88,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 if not DEBUG:
                     solver.report_incorrect_image_captcha()
                 page.reload(wait_until="domcontentloaded")
-            elif "the user name or password is incorrect" in text:
+            elif "the user name or password is incorrect" in text or "password error" in text or "invalid account name or credentials" in text:
                 logger.error("Incorrect login credentials.")
                 update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}")
                 raise Exception(f"Incorrect credentials for backend: {backend.name}")
@@ -450,6 +450,24 @@ def _freeplay_account(page: Page, logger: logging.Logger, amount: int, account_i
 
     page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
     page.locator("button:has-text('search')").click()
+
+    row = click_account_action(page, account_id, logger, "read")
+    balance = row.locator("td:nth-child(5) .cell").inner_text().strip()
+    logger.info(f"Available balance: {balance}")
+    if float(balance) >= 5:
+        logger.info("Available balance is not freeplay eligible. Aborting")
+        insert_log_and_update_automation_result(
+            log_type="warning",
+            log_description="Available balance is not freeplay eligible. Aborting",
+            task_id=task_id,
+            backend_id=BACKEND_ID,
+            source_url=str(page.url),
+            account_id=_.id,
+            result_status="failed",
+            result_data={"balance": balance},
+            result_description="Available balance is not freeplay eligible. Aborting",
+        )
+        return
 
     click_account_action(page, account_id, logger, "recharge")
 

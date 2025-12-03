@@ -309,6 +309,30 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
 
     logger.debug("Calling click_update_for_account helper.")
     click_update_for_account(frame, account_id, logger)
+    table = main_frame.locator("table#item")
+    table.wait_for(timeout=5000, state="visible")
+
+    row = table.locator(
+        f"//tr[contains(@class, 'list')][td[3][normalize-space(text())='{account_id}']]"
+    ).first
+    row.wait_for(timeout=5000)
+    if row.is_visible():
+        balance = row.locator("td:nth-child(5)").inner_text().strip()
+        logger.info(f"Account balance: {balance}")
+        if float(balance) >= 5:
+            logger.info(f"Available balance is not freeplay eligible. Aborting")
+            insert_log_and_update_automation_result(
+                log_type="warning",
+                log_description="Available balance is not freeplay eligible. Aborting",
+                task_id=task_id,
+                backend_id=BACKEND_ID,
+                source_url=str(page.url),
+                account_id=_.id,
+                result_status="failed",
+                result_data={"balance": balance},
+                result_description="Available balance is not freeplay eligible. Aborting",
+            )
+            return
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount
