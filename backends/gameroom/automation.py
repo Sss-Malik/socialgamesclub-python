@@ -486,6 +486,23 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     # call your existing helper (which still expects a Frame object)
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
+    row = click_account_action(frame_obj, account_id, "read", logger)
+    balance = row.locator("td[data-field='score']").inner_text().strip()
+    logger.info(f"Available balance: {balance}")
+    if float(balance) >= 5:
+        logger.info("Available balance is not freeplay eligible. Aborting")
+        insert_log_and_update_automation_result(
+            log_type="warning",
+            log_description="Available balance is not freeplay eligible. Aborting",
+            task_id=task_id,
+            backend_id=BACKEND_ID,
+            source_url=str(page.url),
+            account_id=_.id,
+            result_status="failed",
+            result_data={"balance": balance},
+            result_description="Available balance is not freeplay eligible. Aborting",
+        )
+        return
     click_account_action(frame_obj, account_id, "recharge", logger)
 
     # fill & submit recharge form

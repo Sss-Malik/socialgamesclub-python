@@ -278,6 +278,29 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
     acc_sr.fill(account_id)
     page.locator('button:has-text("Search")').click()
 
+    row = page.locator(
+        "#table-accounts tbody tr[rel='account']"
+    ).filter(
+        has=page.locator(f"td:nth-child(2) span.label:text('{account_id}')")
+    ).first
+
+    row.wait_for(timeout=5000)
+    balance = row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip()
+    logger.info(f"Available balance: {balance}")
+    if float(balance) >= 5:
+        insert_log_and_update_automation_result(
+            log_type="warning",
+            log_description="Available balance is not freeplay eligible. Aborting",
+            task_id=task_id,
+            backend_id=BACKEND_ID,
+            source_url=str(page.url),
+            account_id=_.id,
+            result_status="failed",
+            result_data={"balance": balance},
+            result_description="Available balance is not freeplay eligible. Aborting",
+        )
+        return
+
     click_purchase_for_account(page, account_id, logger)
     page.wait_for_timeout(2_000)
 

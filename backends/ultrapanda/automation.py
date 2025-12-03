@@ -433,6 +433,36 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
         except PlaywrightTimeoutError:
             logger.info("No error message, proceeding…")
 
+        table = page.locator(
+            "div.el-table",
+            has=page.locator("th", has_text="Connect game provider UID")
+        ).first
+
+        table.wait_for(timeout=10000)
+
+        row = table.locator(
+            "tbody tr",
+            has=page.locator("td:nth-child(2) .cell", has_text=account_id)
+        ).first
+
+        row.wait_for(timeout=5000)
+        balance = row.locator("td:nth-child(10) .cell span").inner_text().strip()
+        logger.info(f"Available balance: {balance}")
+        if float(balance) >= 5:
+            logger.info(f"Available balance is not freeplay eligible. Aborting")
+            insert_log_and_update_automation_result(
+                log_type="warning",
+                log_description="Available balance is not freeplay eligible. Aborting",
+                task_id=task_id,
+                backend_id=BACKEND_ID,
+                source_url=str(page.url),
+                account_id=_.id,
+                result_status="failed",
+                result_data={"balance": balance},
+                result_description="Available balance is not freeplay eligible. Aborting",
+            )
+            return
+
 
         # open the score‐setting UI
         click_set_score(page, account_id, logger)
