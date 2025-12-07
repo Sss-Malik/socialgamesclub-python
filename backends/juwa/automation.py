@@ -90,6 +90,21 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     logger.info("Login and navigation successful.")
 
+    try:
+        dialog_locator = page.locator(".el-message-box__wrapper").filter(
+            has_text="VegasZ Games & Juwa 2.0 Rollout"
+        )
+
+        dialog_locator.wait_for(state="visible", timeout=5000)
+
+        ok_button = dialog_locator.locator("button.el-button--primary").filter(has_text="OK")
+
+        # 4. Click the button
+        ok_button.click()
+        logger.info("Juwa 2.0 dialog resolved")
+
+    except PlaywrightTimeoutError:
+        logger.info("Juwa 2.0 dialog did not appear.")
 
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
     logger.debug("Opening create account dialog.")
@@ -830,7 +845,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
-            backend=backend.name,
+            backend=backend_game.name,
             task_id=task_id,
             account_id=account_id,
         )
