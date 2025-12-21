@@ -155,6 +155,29 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            try:
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
+                )
+
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=3000)
+
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=Your account was logged in from a different location"
+                ).wait_for(timeout=3000)
+
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("Remote login dialog detected and closed.")
+
+            except PlaywrightTimeoutError:
+                # Dialog did not appear — safe to continue
+                logger.info("Remote login dialog not present, continuing.")
             logger.info("Login and navigation successful.")
 
             return new_session
@@ -191,6 +214,30 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.debug("No dialog appeared within the timeout")
 
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+        try:
+            # Locate the dialog by ARIA role and title text
+            dialog = page.get_by_role(
+                "dialog",
+                name="Hint"
+            )
+
+            # Wait briefly for dialog to appear
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # Ensure the dialog contains the expected warning text
+            dialog.locator(
+                "text=Your account was logged in from a different location"
+            ).wait_for(timeout=3000)
+
+            # Click the Confirm button inside the dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("Remote login dialog detected and closed.")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("Remote login dialog not present, continuing.")
 
         logger.info("Session from another task injected and validated.")
         return session
