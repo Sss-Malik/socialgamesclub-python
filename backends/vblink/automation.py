@@ -41,19 +41,6 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             logger.info("Session injection and validation successful")
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-            try:
-                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
-                dialog.wait_for(state="visible", timeout=5000)
-                text = dialog.inner_text(timeout=2000).strip().lower()
-                logger.info(f"Dialog appeared. Text: {text}")
-                confirm_btn = dialog.locator("button:has-text('confirm')").first
-                if confirm_btn.is_visible(timeout=2000):
-                    confirm_btn.click()
-                    logger.info("Dialog resolved by clicking confirm")
-                else:
-                    logger.warning("Dialog appeared but no confirm button found")
-            except PlaywrightTimeoutError:
-                logger.debug("No dialog appeared within the timeout")
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             return session
@@ -77,18 +64,18 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             page.goto(backend.backend_url, wait_until="domcontentloaded")
 
-            # --- Handle possible announcement modal ---
-            try:
-                # Wait for announcement modal to appear (up to 5 seconds)
-                dialog = page.locator('div[role="dialog"][aria-label="announcement"]')
-                dialog.wait_for(state="visible", timeout=5000)
-                logger.info("Announcement modal detected.")
-                confirm_btn = dialog.locator('button.el-button.notice-btn')
-                if confirm_btn.is_visible():
-                    confirm_btn.click()
-                    logger.info("Announcement modal closed via confirm button.")
-            except PlaywrightTimeoutError:
-                logger.info(f"No announcement modal or error while handling it")
+            # --- Handle possible announcement modal (no new announcements currently) ---
+            # try:
+            #     # Wait for announcement modal to appear (up to 5 seconds)
+            #     dialog = page.locator('div[role="dialog"][aria-label="announcement"]')
+            #     dialog.wait_for(state="visible", timeout=5000)
+            #     logger.info("Announcement modal detected.")
+            #     confirm_btn = dialog.locator('button.el-button.notice-btn')
+            #     if confirm_btn.is_visible():
+            #         confirm_btn.click()
+            #         logger.info("Announcement modal closed via confirm button.")
+            # except PlaywrightTimeoutError:
+            #     logger.info(f"No announcement modal or error while handling it")
 
             username = backend.username or USERNAME
             password = backend.password or PASSWORD
@@ -132,29 +119,10 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 ok_button.click()
                 logger.debug("google auth OK button clicker")
             except PlaywrightTimeoutError:
-                pass
+                logger.debug("google auth code did not appear")
 
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
-            try:
-                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
-                dialog.wait_for(state="visible", timeout=5000)
-                text = dialog.inner_text(timeout=2000).strip().lower()
-                logger.info(f"Dialog appeared. Text: {text}")
-                confirm_btn = dialog.locator("button:has-text('confirm')").first
-                if confirm_btn.is_visible(timeout=2000):
-                    confirm_btn.click()
-                    logger.info("Dialog resolved by clicking confirm")
-                else:
-                    logger.warning("Dialog appeared but no confirm button found")
-            except PlaywrightTimeoutError:
-                logger.debug("No dialog appeared within the timeout")
-
-            token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
-            new_session = create_backend_session(backend.name, token=token)
-
-
-            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             try:
                 # Locate the dialog by ARIA role and title text
                 dialog = page.get_by_role(
@@ -178,6 +146,37 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             except PlaywrightTimeoutError:
                 # Dialog did not appear — safe to continue
                 logger.info("Remote login dialog not present, continuing.")
+
+            try:
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
+                )
+
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=3000)
+
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=To ensure the security of your account"
+                ).wait_for(timeout=3000)
+
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("google authenticator bind dialog detected and closed")
+
+            except PlaywrightTimeoutError:
+                # Dialog did not appear — safe to continue
+                logger.info("google authenticator bind dialog not present, continuing.")
+
+            token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
+            new_session = create_backend_session(backend.name, token=token)
+
+
+            page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
             logger.info("Login and navigation successful.")
 
             return new_session
@@ -199,45 +198,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
         logger.info("Session from another task injected and validated.")
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-        try:
-            dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
-            dialog.wait_for(state="visible", timeout=5000)
-            text = dialog.inner_text(timeout=2000).strip().lower()
-            logger.info(f"Dialog appeared. Text: {text}")
-            confirm_btn = dialog.locator("button:has-text('confirm')").first
-            if confirm_btn.is_visible(timeout=2000):
-                confirm_btn.click()
-                logger.info("Dialog resolved by clicking confirm")
-            else:
-                logger.warning("Dialog appeared but no confirm button found")
-        except PlaywrightTimeoutError:
-            logger.debug("No dialog appeared within the timeout")
+
 
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
-        try:
-            # Locate the dialog by ARIA role and title text
-            dialog = page.get_by_role(
-                "dialog",
-                name="Hint"
-            )
 
-            # Wait briefly for dialog to appear
-            dialog.wait_for(state="visible", timeout=3000)
-
-            # Ensure the dialog contains the expected warning text
-            dialog.locator(
-                "text=Your account was logged in from a different location"
-            ).wait_for(timeout=3000)
-
-            # Click the Confirm button inside the dialog
-            dialog.get_by_role("button", name="confirm").click()
-
-            logger.info("Remote login dialog detected and closed.")
-
-        except PlaywrightTimeoutError:
-            # Dialog did not appear — safe to continue
-            logger.info("Remote login dialog not present, continuing.")
 
         logger.info("Session from another task injected and validated.")
         return session
