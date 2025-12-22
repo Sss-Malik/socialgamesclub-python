@@ -170,6 +170,9 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
                 # Dialog did not appear — safe to continue
                 logger.info("Remote login dialog not present, continuing.")
 
+
+            page.wait_for_timeout(3000)
+
             try:
                 # Locate the dialog by ARIA role and title text
                 dialog = page.get_by_role(
