@@ -197,9 +197,6 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
 
-            ss = capture_and_upload_screenshot(page, backend.name, task_id)
-            logger.info("Screenshot captured: {}".format(ss))
-
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
