@@ -57,7 +57,7 @@ def generate_credentials():
         number = str(random.randint(1, 999))
 
         # combine them
-        return f"{word}{number}".capitalize() + "@"
+        return f"{word}{number}".capitalize()
     password = generate_password()
 
     return account_id, password
