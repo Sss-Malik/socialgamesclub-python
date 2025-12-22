@@ -43,6 +43,29 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            try:
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
+                )
+
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=5000)
+
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=To ensure the security of your account"
+                ).wait_for(timeout=3000)
+
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("google authenticator bind dialog detected and closed")
+
+            except PlaywrightTimeoutError:
+                # Dialog did not appear — safe to continue
+                logger.info("google authenticator bind dialog not present, continuing.")
             return session
 
         else:
@@ -205,7 +228,29 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
+        try:
+            # Locate the dialog by ARIA role and title text
+            dialog = page.get_by_role(
+                "dialog",
+                name="Hint"
+            )
 
+            # Wait briefly for dialog to appear
+            dialog.wait_for(state="visible", timeout=5000)
+
+            # Ensure the dialog contains the expected warning text
+            dialog.locator(
+                "text=To ensure the security of your account"
+            ).wait_for(timeout=3000)
+
+            # Click the Confirm button inside the dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
 
         logger.info("Session from another task injected and validated.")
         return session
