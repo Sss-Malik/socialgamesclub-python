@@ -168,7 +168,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         logger.info("Session from another task injected and validated.")
         return session
 
-def _create_single_account(page: Page, logger: logging.Logger, task_id):
+def _create_single_account(page: Page, logger: logging.Logger, task_id, user_id = None):
     logger.debug("Opening create account dialog.")
     main_iframe = page.frame_locator(MAIN_IFRAME)
     main_iframe.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
@@ -200,7 +200,7 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
                 continue
             elif "successful" in text:
                 logger.info("Account created successfully: %s", account_id)
-                insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
+                insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID, user_id=user_id, is_assigned=bool(user_id))
                 save_credentials(account_id, password, logger, DATA_DIR)
                 page.wait_for_timeout(1_000)
                 main_iframe.locator(ACCOUNT_SUCCESS_CLOSE).click()
@@ -641,6 +641,67 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
             result_status="failed",
             result_description="Failed to detect reset response",
         )
+
+
+
+@with_persistent_browser
+def action_create_account_user(page: Page, task_id, backend, user_id):
+    backend = get_backend(backend)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("Create-account action started for individual account")
+
+    session = None
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating individual account creation for backend '{BACKEND_NAME}'",
+            source_url=str(page.url),
+            backend_id=BACKEND_ID, task_id=task_id
+        )
+        session = _login_and_navigate(page, logger, backend, task_id)
+        if session:
+            increment_active_tasks_count(session.id)
+            logger.info("Creating account")
+            _create_single_account(page, logger, task_id, user_id=user_id)
+            page.reload(wait_until="domcontentloaded")
+
+            game_user = page.locator('a', has_text="Game User")
+            game_user.wait_for(state="visible", timeout=20_000)
+            game_user.click()
+
+            user_mgmt = page.locator(USER_MANAGEMENT_EL)
+            user_mgmt.wait_for(state="visible", timeout=20_000)
+            user_mgmt.click()
+
+        update_automation_result(task_id=task_id, status="success", description="Account creation successful.")
+    except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
+        logger.critical("Error during account creation: %s", e, exc_info=True)
+        send_email(
+            subject="Account creation failed",
+            body=f"Critical error occurred during account creation for backend '{BACKEND_NAME}'. Please review",
+        )
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during account creation: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend.id,
+            result_status="failed",
+            result_description=f"Error during account creation: {e}",
+            screenshot_url=screenshot_url
+        )
+    finally:
+        if session:
+            decrement_active_tasks_count(session.id)
+        logger.info("Create-account action completed.")
+        insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=backend.id, task_id=task_id)
 
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):

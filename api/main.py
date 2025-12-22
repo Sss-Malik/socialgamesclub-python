@@ -53,7 +53,8 @@ ActionName = Literal[
     "withdraw-account",
     "read-account",
     "freeplay-account",
-    "reset-password"
+    "reset-password",
+    "create-account-user",
 ]
 
 def _check_app_key(x_app_key: Optional[str]) -> None:
@@ -158,6 +159,20 @@ async def create_account(
         action="create-account",
         description="Initiate account creation",
         queue_kwargs={},
+        request_type="create",
+        payload=req.dict(),
+        user_id=None,
+    )
+@app.post("/automation/create-account-user")
+async def create_account_user(
+    req: CreateAccountRequest,
+    current_user: User = Depends(require_user_token),
+):
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="create-account-user",
+        description="Initiate account creation",
+        queue_kwargs={"user_id": current_user.id},
         request_type="create",
         payload=req.dict(),
         user_id=None,
