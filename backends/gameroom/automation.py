@@ -665,16 +665,9 @@ def action_create_account_user(page: Page, task_id, backend, user_id):
             logger.info("Creating account")
             _create_single_account(page, logger, task_id, user_id=user_id)
             page.reload(wait_until="domcontentloaded")
-
-            game_user = page.locator('a', has_text="Game User")
-            game_user.wait_for(state="visible", timeout=20_000)
-            game_user.click()
-
-            user_mgmt = page.locator(USER_MANAGEMENT_EL)
-            user_mgmt.wait_for(state="visible", timeout=20_000)
-            user_mgmt.click()
-
-        update_automation_result(task_id=task_id, status="success", description="Account creation successful.")
+            update_automation_result(task_id=task_id, status="success", description="Account creation successful.")
+        else:
+            raise Exception("Account creation failed. Session not returned from login")
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
             page=page,
