@@ -175,7 +175,7 @@ async def create_account_user(
         queue_kwargs={"user_id": current_user.id},
         request_type="create",
         payload=req.dict(),
-        user_id=None,
+        user_id=current_user.id,
     )
 
 
