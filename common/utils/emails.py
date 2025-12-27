@@ -3,7 +3,9 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from typing import Any, Iterable, Mapping, Union
+import traceback
 
+from common.utils.db_actions import insert_log
 from settings import (
     ACTIVATE_EMAILS,
     MAIL_FROM_ADDRESS,
@@ -11,7 +13,8 @@ from settings import (
     MAIL_PASSWORD,
     MAIL_HOST,
     MAIL_PORT,
-
+    MAIL_USERNAME,
+    MAIL_ENCRYPTION,
     MAIL_RECIPIENT
     # optionally: MAIL_ENCRYPTION = "tls" | "ssl" | "none"
 )
@@ -56,24 +59,30 @@ def send_email(
     to_email: Union[str, Iterable[str]] = MAIL_RECIPIENT,
 ) -> None:
     """
-    Send a simple text email. SMTP settings come from `settings`.
-    - `to_email` can be a single address or an iterable of addresses.
-    - `body` can be str | dict | list/tuple (dicts/lists are pretty-formatted).
+    Send a simple text email.
+    Fails gracefully — exceptions are caught and logged.
     """
 
     if not ACTIVATE_EMAILS:
-        print("Emails deactivated skipping")
+        print("Emails deactivated; skipping send.")
         return
 
-    # --- Validate config from settings ---
+    # --- Validate config (non-fatal) ---
+    missing = []
     if not MAIL_HOST:
-        raise ValueError("MAIL_HOST is not set.")
+        missing.append("MAIL_HOST")
     if not MAIL_PORT:
-        raise ValueError("MAIL_PORT is not set.")
+        missing.append("MAIL_PORT")
+    if not MAIL_USERNAME:
+        missing.append("MAIL_USERNAME")
     if not MAIL_PASSWORD:
-        raise ValueError("SMTP password / SENDGRID_API_KEY not set.")
+        missing.append("MAIL_PASSWORD")
     if not MAIL_FROM_ADDRESS:
-        raise ValueError("MAIL_FROM_ADDRESS is not set.")
+        missing.append("MAIL_FROM_ADDRESS")
+
+    if missing:
+        print(f"[Email] Missing configuration: {', '.join(missing)}")
+        return
 
     # --- Normalize recipients ---
     if isinstance(to_email, (list, tuple, set)):
@@ -81,23 +90,39 @@ def send_email(
     else:
         recipients = [to_email]
 
+    if not recipients:
+        print("[Email] No recipients provided.")
+        return
+
     # --- Build message ---
     msg = EmailMessage()
-    msg["From"] = f"{MAIL_FROM_NAME} <{MAIL_FROM_ADDRESS}>" if MAIL_FROM_NAME else MAIL_FROM_ADDRESS
+    msg["From"] = (
+        f"{MAIL_FROM_NAME} <{MAIL_FROM_ADDRESS}>"
+        if MAIL_FROM_NAME
+        else MAIL_FROM_ADDRESS
+    )
     msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject
+
     if reply_to:
         msg["Reply-To"] = reply_to
 
-    rendered = _format_body(body)
-    msg.set_content(rendered)
+    msg.set_content(_format_body(body))
 
-    # --- Send (STARTTLS) ---
-    context = ssl.create_default_context()
-    with smtplib.SMTP(MAIL_HOST, int(MAIL_PORT), timeout=timeout) as server:
-        server.ehlo()
-        server.starttls(context=context)
-        server.ehlo()
-        # Some providers (e.g., SendGrid) use 'apikey' as username with the API key as password
-        server.login("apikey", MAIL_PASSWORD)
-        server.send_message(msg)
+    # --- Send email safely ---
+    try:
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP(MAIL_HOST, int(MAIL_PORT), timeout=timeout) as server:
+            server.ehlo()
+
+            if MAIL_ENCRYPTION and MAIL_ENCRYPTION.lower() == "tls":
+                server.starttls(context=context)
+                server.ehlo()
+
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.send_message(msg)
+
+    except Exception as exc:
+        insert_log("error", f"Email sending failed: {exc}")
+        # Swallow exception intentionally — execution continues
