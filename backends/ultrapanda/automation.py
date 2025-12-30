@@ -152,18 +152,26 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
             try:
-                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
+                dialog = (
+                    page.locator("div[role='dialog'].el-dialog")
+                    .filter(has=page.locator(":visible"))
+                    .first
+                )
+
                 dialog.wait_for(state="visible", timeout=5000)
+
                 text = dialog.inner_text(timeout=2000).strip().lower()
                 logger.info(f"Dialog appeared. Text: {text}")
                 confirm_btn = dialog.locator("button:has-text('confirm')").first
-                if confirm_btn.is_visible(timeout=2000):
+
+                if confirm_btn.count() > 0 and confirm_btn.is_visible():
                     confirm_btn.click()
                     logger.info("Dialog resolved by clicking confirm")
                 else:
                     logger.warning("Dialog appeared but no confirm button found")
+
             except PlaywrightTimeoutError:
-                logger.debug("No dialog appeared within the timeout")
+                logger.debug("No dialog became visible within timeout")
 
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
