@@ -131,6 +131,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
+            ss = capture_and_upload_screenshot(page=page, backend=BACKEND_NAME, task_id=task_id)
+            logger.debug(f"debug screenshot captured: {ss}")
             try:
                 # Locate the dialog by ARIA role and title text
                 dialog = page.get_by_role(
