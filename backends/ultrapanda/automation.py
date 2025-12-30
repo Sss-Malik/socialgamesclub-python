@@ -37,35 +37,30 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.info("Session injection and validation successful")
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
-            try:
-                snippet_text = "Your account was logged in from a different location"
-
-                # Locate the dialog containing this text
-                dialog_locator = page.locator(f'div[role="dialog"]:has-text("{snippet_text}")')
-                dialog_locator.wait_for(state="visible", timeout=5000)
-
-                # Click the confirm button inside this specific dialog
-                confirm_button = dialog_locator.locator('button:has-text("confirm")')
-                confirm_button.click()
-                logger.info("login warning resolved")
-            except PlaywrightTimeoutError:
-                logger.info("login warning pass")
-
-            try:
-                dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
-                dialog.wait_for(state="visible", timeout=5000)
-                text = dialog.inner_text(timeout=2000).strip().lower()
-                logger.info(f"Dialog appeared. Text: {text}")
-                confirm_btn = dialog.locator("button:has-text('confirm')").first
-                if confirm_btn.is_visible(timeout=2000):
-                    confirm_btn.click()
-                    logger.info("Dialog resolved by clicking confirm")
-                else:
-                    logger.warning("Dialog appeared but no confirm button found")
-            except PlaywrightTimeoutError:
-                logger.debug("No dialog appeared within the timeout")
-
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            try:
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
+                )
+
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=5000)
+
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=To ensure the security of your account"
+                ).wait_for(timeout=3000)
+
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("google authenticator bind dialog detected and closed")
+
+            except PlaywrightTimeoutError:
+                # Dialog did not appear — safe to continue
+                logger.info("google authenticator bind dialog not present, continuing.")
             return session
         else:
             logger.warning("Session injection failed. Invalidating session.")
@@ -134,44 +129,57 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             except PlaywrightTimeoutError:
                 pass
 
-            try:
-                snippet_text = "Your account was logged in from a different location"
-
-                # Locate the dialog containing this text
-                dialog_locator = page.locator(f'div[role="dialog"]:has-text("{snippet_text}")')
-                dialog_locator.wait_for(state="visible", timeout=5000)
-
-                # Click the confirm button inside this specific dialog
-                confirm_button = dialog_locator.locator('button:has-text("confirm")')
-                confirm_button.click()
-                logger.info("login warning resolved")
-            except PlaywrightTimeoutError:
-                logger.info("login warning pass")
-
-
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
             try:
-                dialog = (
-                    page.locator("div[role='dialog'].el-dialog")
-                    .filter(has=page.locator(":visible"))
-                    .first
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
                 )
 
-                dialog.wait_for(state="visible", timeout=5000)
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=3000)
 
-                text = dialog.inner_text(timeout=2000).strip().lower()
-                logger.info(f"Dialog appeared. Text: {text}")
-                confirm_btn = dialog.locator("button:has-text('confirm')").first
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=Your account was logged in from a different location"
+                ).wait_for(timeout=3000)
 
-                if confirm_btn.count() > 0 and confirm_btn.is_visible():
-                    confirm_btn.click()
-                    logger.info("Dialog resolved by clicking confirm")
-                else:
-                    logger.warning("Dialog appeared but no confirm button found")
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("Remote login dialog detected and closed.")
 
             except PlaywrightTimeoutError:
-                logger.debug("No dialog became visible within timeout")
+                # Dialog did not appear — safe to continue
+                logger.info("Remote login dialog not present, continuing.")
+
+            page.wait_for_timeout(3000)
+
+            try:
+                # Locate the dialog by ARIA role and title text
+                dialog = page.get_by_role(
+                    "dialog",
+                    name="Hint"
+                )
+
+                # Wait briefly for dialog to appear
+                dialog.wait_for(state="visible", timeout=5000)
+
+                # Ensure the dialog contains the expected warning text
+                dialog.locator(
+                    "text=To ensure the security of your account"
+                ).wait_for(timeout=3000)
+
+                # Click the Confirm button inside the dialog
+                dialog.get_by_role("button", name="confirm").click()
+
+                logger.info("google authenticator bind dialog detected and closed")
+
+            except PlaywrightTimeoutError:
+                # Dialog did not appear — safe to continue
+                logger.info("google authenticator bind dialog not present, continuing.")
 
             token = page.evaluate("() => sessionStorage.getItem('Admin-Token')")
             new_session = create_backend_session(backend.name, token=token)
@@ -198,21 +206,33 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
         logger.info("Session from another task injected and validated.")
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
-        try:
-            dialog = page.locator("div[role='dialog'].el-dialog").filter(has=page.locator(":visible")).first
-            dialog.wait_for(state="visible", timeout=5000)
-            text = dialog.inner_text(timeout=2000).strip().lower()
-            logger.info(f"Dialog appeared. Text: {text}")
-            confirm_btn = dialog.locator("button:has-text('confirm')").first
-            if confirm_btn.is_visible(timeout=2000):
-                confirm_btn.click()
-                logger.info("Dialog resolved by clicking confirm")
-            else:
-                logger.warning("Dialog appeared but no confirm button found")
-        except PlaywrightTimeoutError:
-            logger.debug("No dialog appeared within the timeout")
 
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+        try:
+            # Locate the dialog by ARIA role and title text
+            dialog = page.get_by_role(
+                "dialog",
+                name="Hint"
+            )
+
+            # Wait briefly for dialog to appear
+            dialog.wait_for(state="visible", timeout=5000)
+
+            # Ensure the dialog contains the expected warning text
+            dialog.locator(
+                "text=To ensure the security of your account"
+            ).wait_for(timeout=3000)
+
+            # Click the Confirm button inside the dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
+
         logger.info("Session from another task injected and validated.")
         return session
 
