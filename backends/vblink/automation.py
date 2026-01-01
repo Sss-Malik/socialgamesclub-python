@@ -44,21 +44,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             try:
-                # Locate the dialog by ARIA role and title text
-                dialog = page.get_by_role(
-                    "dialog",
-                    name="Hint"
+                # 1. Define the dialog by Role + Name AND filter by the specific text content
+                # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+                dialog = page.get_by_role("dialog", name="Hint").filter(
+                    has_text="To ensure the security of your account"
                 )
 
-                # Wait briefly for dialog to appear
-                dialog.wait_for(state="visible", timeout=5000)
+                # 2. Wait for this specific dialog to be visible
+                dialog.wait_for(state="visible", timeout=3000)
 
-                # Ensure the dialog contains the expected warning text
-                dialog.locator(
-                    "text=To ensure the security of your account"
-                ).wait_for(timeout=3000)
-
-                # Click the Confirm button inside the dialog
+                # 3. Click the Confirm button inside this specific dialog
                 dialog.get_by_role("button", name="confirm").click()
 
                 logger.info("google authenticator bind dialog detected and closed")
@@ -219,21 +214,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
 
         try:
-            # Locate the dialog by ARIA role and title text
-            dialog = page.get_by_role(
-                "dialog",
-                name="Hint"
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
             )
 
-            # Wait briefly for dialog to appear
-            dialog.wait_for(state="visible", timeout=5000)
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
 
-            # Ensure the dialog contains the expected warning text
-            dialog.locator(
-                "text=To ensure the security of your account"
-            ).wait_for(timeout=3000)
-
-            # Click the Confirm button inside the dialog
+            # 3. Click the Confirm button inside this specific dialog
             dialog.get_by_role("button", name="confirm").click()
 
             logger.info("google authenticator bind dialog detected and closed")
@@ -302,6 +292,24 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
 
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        try:
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
+            )
+
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # 3. Click the Confirm button inside this specific dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
         page.locator("label.el-radio", has_text="Player account").click()
 
         page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -451,6 +459,24 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
 
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        try:
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
+            )
+
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # 3. Click the Confirm button inside this specific dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
         page.locator("label.el-radio", has_text="Player account").click()
 
         page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -589,6 +615,24 @@ def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        try:
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
+            )
+
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # 3. Click the Confirm button inside this specific dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
         page.locator("label.el-radio", has_text="Player account").click()
 
         page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -637,6 +681,24 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
 
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        try:
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
+            )
+
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # 3. Click the Confirm button inside this specific dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
         page.locator("label.el-radio", has_text="Player account").click()
 
         page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
@@ -758,6 +820,24 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
 
     for attempt in range(5):
         page.goto(SEARCH_URL, wait_until="domcontentloaded")
+        try:
+            # 1. Define the dialog by Role + Name AND filter by the specific text content
+            # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+            dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="To ensure the security of your account"
+            )
+
+            # 2. Wait for this specific dialog to be visible
+            dialog.wait_for(state="visible", timeout=3000)
+
+            # 3. Click the Confirm button inside this specific dialog
+            dialog.get_by_role("button", name="confirm").click()
+
+            logger.info("google authenticator bind dialog detected and closed")
+
+        except PlaywrightTimeoutError:
+            # Dialog did not appear — safe to continue
+            logger.info("google authenticator bind dialog not present, continuing.")
         page.locator("label.el-radio", has_text="Player account").click()
 
         page.locator(ACCOUNT_SEARCH_INPUT).fill(account_id)
