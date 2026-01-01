@@ -147,21 +147,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
             logger.info("Login successful, navigating to user management page.")
             try:
-                # Locate the dialog by ARIA role and title text
-                dialog = page.get_by_role(
-                    "dialog",
-                    name="Hint"
+                # 1. Define the dialog by Role + Name AND filter by the specific text content
+                # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+                dialog = page.get_by_role("dialog", name="Hint").filter(
+                    has_text="Your account was logged in from a different location"
                 )
 
-                # Wait briefly for dialog to appear
+                # 2. Wait for this specific dialog to be visible
                 dialog.wait_for(state="visible", timeout=3000)
 
-                # Ensure the dialog contains the expected warning text
-                dialog.locator(
-                    "text=Your account was logged in from a different location"
-                ).wait_for(timeout=3000)
-
-                # Click the Confirm button inside the dialog
+                # 3. Click the Confirm button inside this specific dialog
                 dialog.get_by_role("button", name="confirm").click()
 
                 logger.info("Remote login dialog detected and closed.")
@@ -174,21 +169,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.wait_for_timeout(3000)
 
             try:
-                # Locate the dialog by ARIA role and title text
-                dialog = page.get_by_role(
-                    "dialog",
-                    name="Hint"
+                # 1. Define the dialog by Role + Name AND filter by the specific text content
+                # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+                dialog = page.get_by_role("dialog", name="Hint").filter(
+                    has_text="To ensure the security of your account"
                 )
 
-                # Wait briefly for dialog to appear
-                dialog.wait_for(state="visible", timeout=5000)
+                # 2. Wait for this specific dialog to be visible
+                dialog.wait_for(state="visible", timeout=3000)
 
-                # Ensure the dialog contains the expected warning text
-                dialog.locator(
-                    "text=To ensure the security of your account"
-                ).wait_for(timeout=3000)
-
-                # Click the Confirm button inside the dialog
+                # 3. Click the Confirm button inside this specific dialog
                 dialog.get_by_role("button", name="confirm").click()
 
                 logger.info("google authenticator bind dialog detected and closed")
