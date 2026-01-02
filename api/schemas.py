@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 from decimal import Decimal
 
@@ -9,6 +10,7 @@ class RechargeAccountRequest(BaseModel):
     count: int      = Field(1, example=50)
     amount_to_deduct: int      = Field(1, example=50)
     account_id: str = Field(..., example="abc123")
+    coupon_code: Optional[str] = None
 
 class WithdrawAccountRequest(BaseModel):
     backend: str = Field(..., example="juwa")

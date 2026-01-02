@@ -148,7 +148,7 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
 
 
 
-def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id, wallet_id, amount_to_deduct):
+def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id: str, order_id, task_id, wallet_id, amount_to_deduct, coupon_code = None):
     logger.info(f"Initiating recharge: account_id={account_id}, amount={count}")
     _ = get_backend_account(account_id)
 
@@ -193,6 +193,8 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
         bonus_transferred = False
 
+        restore_coupon = True
+
         if "successful" in text:
             logger.info("Recharge successful.")
             log_type = "info"
@@ -207,6 +209,7 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             restore_wallet = False
             amount_restore = None
             wallet_to_restore = None
+            restore_coupon = False
 
             if _.user.bonus_received:
                 bonus_transferred = True
@@ -244,7 +247,9 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             restore_wallet=restore_wallet,
             amount_to_restore=amount_restore,
             wallet_id=wallet_to_restore,
-            bonus_transferred=bonus_transferred
+            bonus_transferred=bonus_transferred,
+            restore_coupon=restore_coupon,
+            coupon_code=coupon_code,
         )
 
     except PlaywrightTimeoutError:
@@ -268,6 +273,8 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
             restore_wallet=True,
             amount_to_restore=amount_to_deduct,
             wallet_id=wallet_id,
+            restore_coupon=True,
+            coupon_code=coupon_code
         )
         logger.info("Wallet balance restored")
 
@@ -637,7 +644,7 @@ def action_create_account(page: Page, task_id, backend):
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=backend.id, task_id=task_id)
 
 @with_persistent_browser
-def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend, wallet_id, amount_to_deduct):
+def action_recharge_account(page: Page, count: int, account_id: str, order_id, task_id, backend, wallet_id, amount_to_deduct, coupon_code = None):
     backend_game, backend_account = get_backend_and_account(backend, account_id)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
@@ -651,9 +658,9 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
         _login_and_navigate(page, logger, backend_game, task_id)
-        _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct)
+        _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct, coupon_code)
     except (PlaywrightTimeoutError, Exception) as e:
-        restore_wallet_balance(wallet_id, amount_to_deduct, order_id)
+        restore_wallet_balance(wallet_id, amount_to_deduct, order_id, coupon_code)
         screenshot_url = capture_and_upload_screenshot(
             page=page,
             backend=backend_game.name,
