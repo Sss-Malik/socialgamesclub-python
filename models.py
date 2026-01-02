@@ -120,6 +120,9 @@ class User(Base):
 
     freeplays = relationship("Freeplay", back_populates="user")
 
+    coupons = relationship("Coupon", back_populates="user")
+
+
     # --- Convenience properties ---
     @property
     def balance_minor(self):
@@ -368,3 +371,42 @@ class Freeplay(Base):
 
     def __repr__(self):
         return f"<Freeplay(id={self.id}, user_id={self.user_id}, backend_id={self.backend_id}, status='{self.status}')>"
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    code = Column(String(255), unique=True, nullable=False)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    amount_deposited = Column(DECIMAL(10, 2), nullable=False)
+    payment_method = Column(String(255), nullable=False)
+
+    bonus_amount = Column(DECIMAL(10, 2), nullable=False, server_default="0")
+
+    status = Column(String(50), nullable=False, server_default="pending")
+
+    expires_at = Column(DateTime, nullable=True)
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    # Optional relationship
+    user = relationship("User", back_populates="coupons")

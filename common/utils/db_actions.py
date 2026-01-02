@@ -1,12 +1,15 @@
 import json
+import math
+from datetime import datetime
 
 from common.utils.notify import serialize_model, notify_webhook_async
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay, Coupon
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import or_
 
 def get_backend(name):
     db = SessionLocal()
@@ -489,7 +492,44 @@ def deduct_wallet_balance(wallet_id, deduct_amount):
         db.close()
 
 
-def restore_wallet_balance(wallet_id, restore_amount, order_id):
+def check_coupon_validity_and_return_amount(coupon_code: str | None = None):
+    if not coupon_code:
+        return 0
+
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+
+        coupon = (
+            db.query(Coupon)
+            .filter(
+                Coupon.code == coupon_code,
+                Coupon.status == "pending",
+                or_(
+                    Coupon.expires_at == None,
+                    Coupon.expires_at > now
+                )
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if not coupon:
+            return 0
+
+        # mark coupon as used
+        coupon.status = "used"
+        db.commit()
+
+        return math.ceil(coupon.bonus_amount)
+
+    except Exception:
+        db.rollback()
+        return 0
+    finally:
+        db.close()
+
+def restore_wallet_balance(wallet_id, restore_amount, order_id, coupon_code = None):
     db = SessionLocal()
     status = "refunded"
     try:
@@ -500,6 +540,11 @@ def restore_wallet_balance(wallet_id, restore_amount, order_id):
         wallet_detail = db.query(WalletDetail).filter(WalletDetail.wallet_id == wallet_id, WalletDetail.order_id == order_id).first()
         if wallet_detail:
             wallet_detail.status = status
+
+        if coupon_code:
+            coupon = db.query(Coupon).filter(Coupon.code == coupon_code).with_for_update().first()
+            if coupon:
+                coupon.status = "pending"
 
         db.commit()
     except Exception as e:
@@ -526,6 +571,8 @@ def process_recharge_operation(
     amount_to_restore: int = None,
     wallet_id: int = None,
     bonus_transferred: bool = False,
+    restore_coupon: bool = False,
+    coupon_code: str = None
 ):
     db = SessionLocal()
     try:
@@ -582,6 +629,12 @@ def process_recharge_operation(
             if wallet_detail:
                 wallet_detail.status = wallet_status
                 results["wallet_detail"] = wallet_detail
+
+        if restore_coupon:
+            coupon = db.query(Coupon).filter(Coupon.code == coupon_code).first()
+            if coupon:
+                coupon.status = "pending"
+                results["coupon"] = coupon
 
         # ✅ Commit once for all
         db.commit()

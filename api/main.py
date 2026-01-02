@@ -26,7 +26,8 @@ from common.utils.db_actions import (
     get_spin,
     get_automation_result,
     insert_automation_request,
-    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance, insert_automation_result_and_request
+    get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance, insert_automation_result_and_request,
+    check_coupon_validity_and_return_amount
 )
 
 # ---- App setup ----
@@ -205,11 +206,12 @@ async def recharge_account(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
     deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.amount_to_deduct)
+    coupon_bonus_amount = check_coupon_validity_and_return_amount(req.coupon_code) # add coupon bonus to count
     return _enqueue_action(
         backend_key=req.backend,
         action="recharge-account",
         description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct},
+        queue_kwargs={"account_id": req.account_id, "count": req.count + coupon_bonus_amount, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct, "coupon_code": req.coupon_code},
         request_type="recharge",
         payload=req.dict(),
         user_id=current_user.id,
