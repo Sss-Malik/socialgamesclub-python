@@ -3,7 +3,7 @@ import string
 
 from backends.gameroom.config import BACKEND_SIGNATURE
 from settings import WORDS_FOR_PASSWORD
-def generate_credentials():
+def generate_credentials(use_special_char=False):
     # Validate that BACKEND_SIGNATURE contains at least one letter
     if not any(c.isalpha() for c in BACKEND_SIGNATURE):
         raise ValueError("BACKEND_SIGNATURE must contain at least one letter")
@@ -57,7 +57,10 @@ def generate_credentials():
         number = str(random.randint(1, 999))
 
         # combine them
-        return f"{word}{number}".capitalize()
+        result = f"{word}{number}".capitalize()
+        if use_special_char:
+            result += "@"
+        return result
     password = generate_password()
 
     return account_id, password
