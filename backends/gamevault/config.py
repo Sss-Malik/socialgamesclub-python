@@ -9,8 +9,8 @@ MAX_CAPTCHA_RETRIES = 5
 
 LOGIN_URL = "https://agent.gamevault999.com/HomeDetail"
 LOGIN_PAGE_URL = "https://agent.gamevault999.com/login"
-USERNAME  = "TestGV159"
-PASSWORD  = "Test1234"
+USERNAME  = "testgv456"
+PASSWORD  = "Test$1234"
 CAPTCHA = True
 USER_MANAGEMENT_URL = "https://agent.gamevault999.com/userManagement"
 

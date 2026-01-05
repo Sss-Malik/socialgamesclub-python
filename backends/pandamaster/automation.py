@@ -2,6 +2,8 @@
 import json
 import logging
 import random
+import re
+
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
 from backends.pandamaster.config import *
@@ -18,7 +20,8 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     update_order_automation_status, update_automation_result, mark_freeplay_transferred, finalize_status, \
     mark_redeem_request_status, get_backend_account, mark_bonus_transferred, update_password_by_username, \
     restore_wallet_balance, update_order_status, update_wallet_detail_status, get_backend_and_account, \
-    process_recharge_operation, update_freeplay, process_freeplay_operation, insert_log_and_update_automation_result
+    process_recharge_operation, update_freeplay, process_freeplay_operation, insert_log_and_update_automation_result, \
+    update_backend_balance
 from common.utils.browser import with_persistent_browser
 
 
@@ -614,6 +617,65 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
         )
 
 
+def _read_backend(page: Page, logger: logging.Logger, task_id, backend_id):
+    logger.debug("Reading backend balance")
+
+    balance_locator = page.locator("span#UserBalance")
+    balance_locator.wait_for(state="visible")
+
+    balance_text = balance_locator.inner_text()
+    match = re.search(r"\d+", balance_text)
+    balance_value = (match.group()) if match else 0
+
+    logger.debug(f"Parsed balance: {balance_value}")
+    update_backend_balance(backend_id=backend_id, backend_balance=balance_value)
+    return balance_value
+
+
+@with_persistent_browser
+def action_read_backend(page: Page, task_id, backend):
+    backend = get_backend(BACKEND_NAME)
+    ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
+    logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
+    logger.info("read-backend action started")
+
+    try:
+        insert_log(
+            "info",
+            f"Initiating backend balance read for {BACKEND_NAME}",
+            source_url=str(page.url),
+            backend_id=backend.id,
+            task_id=task_id
+        )
+        _login_and_navigate(page, logger, backend, task_id)
+        backend_balance = _read_backend(page, logger, task_id, backend.id)
+        update_automation_result(task_id=task_id, status="success", description="Backend balance read successful.", data=json.dumps({"balance": backend_balance}))
+    except (PlaywrightTimeoutError, Exception) as e:
+        screenshot_url = capture_and_upload_screenshot(
+            page=page,
+            backend=backend.name,
+            task_id=task_id,
+        )
+        logger.error("Screenshot captured and uploaded: %s", screenshot_url)
+        logger.critical("Error during backend balance read: %s", e, exc_info=True)
+        send_email(
+            subject="Backend balance read failed",
+            body=f"Critical error occurred during backend balance read on '{BACKEND_NAME}'. Please review",
+        )
+
+        insert_log_and_update_automation_result(
+            log_type="error",
+            log_description=f"Error during backend balance read: {e}",
+            task_id=task_id,
+            source_url=str(page.url),
+            backend_id=backend.id,
+            result_status="failed",
+            result_description=f"Error during backend balance read: {e}",
+            screenshot_url=screenshot_url
+        )
+    finally:
+        logger.info("Read-backend action completed.")
+        insert_log("info", "Read backend action completed", source_url=str(page.url), backend_id=backend.id, task_id=task_id)
 
 @with_persistent_browser
 def action_create_account(page: Page, task_id, backend):

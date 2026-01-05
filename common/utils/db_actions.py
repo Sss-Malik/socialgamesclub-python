@@ -6,12 +6,13 @@ from datetime import datetime
 from common.utils.notify import serialize_model, notify_webhook_async
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
-    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay, Coupon
+    WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay, \
+    Coupon, BackendBalance
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import or_
-
+from sqlalchemy.dialects.mysql import insert
 def get_backend(name):
     db = SessionLocal()
     try:
@@ -856,6 +857,30 @@ def update_freeplay(idx, status):
         return False
     finally:
         db.close()
+
+def update_backend_balance(backend_id: int, backend_balance) -> bool:
+    db = SessionLocal()
+    try:
+        stmt = insert(BackendBalance).values(
+            backend_id=backend_id,
+            remaining_balance=backend_balance
+        ).on_duplicate_key_update(
+            remaining_balance=backend_balance,
+            updated_at=func.now()
+        )
+
+        db.execute(stmt)
+        db.commit()
+        return True
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating backend balance: {e}")
+        return False
+
+    finally:
+        db.close()
+
 
 def process_freeplay_operation(
     t: str,

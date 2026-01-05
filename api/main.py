@@ -56,6 +56,7 @@ ActionName = Literal[
     "freeplay-account",
     "reset-password",
     "create-account-user",
+    "read-backend"
 ]
 
 def _check_app_key(x_app_key: Optional[str]) -> None:
@@ -107,7 +108,7 @@ def _enqueue_action(
     action: ActionName,
     description: str,
     queue_kwargs: Dict[str, Any],
-    request_type: Literal["create", "recharge", "withdraw", "read", "freeplay", "reset-password"],
+    request_type: Literal["create", "recharge", "withdraw", "read", "freeplay", "reset-password", "read-backend"],
     payload: Dict[str, Any],
     user_id: Optional[int] = None,
     order_id: Optional[str] = None,
@@ -161,6 +162,21 @@ async def create_account(
         description="Initiate account creation",
         queue_kwargs={},
         request_type="create",
+        payload=req.dict(),
+        user_id=None,
+    )
+
+@app.post("/automation/read-backend")
+async def backend_balance(
+    req: CreateAccountRequest,
+    _: bool = Depends(require_app_key),
+):
+    return _enqueue_action(
+        backend_key=req.backend,
+        action="read-backend",
+        description="Initiate backend balance fetch",
+        queue_kwargs={},
+        request_type="read-backend",
         payload=req.dict(),
         user_id=None,
     )
