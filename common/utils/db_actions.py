@@ -323,7 +323,7 @@ def decrement_active_tasks_count(session_id: int, logger: logging.Logger = None)
             logger.info(
                 "decrement active tasks count for session %s backend %s",
                 session_id,
-                session.name if session else "None",
+                session.backend if session else "None",
             )
 
 def get_referral_bonus(user_id):
