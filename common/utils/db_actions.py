@@ -301,13 +301,13 @@ def increment_active_tasks_count(session_id: int, logger: logging.Logger = None)
             session.active_tasks_count = (session.active_tasks_count or 0) + 1
             db.commit()
     finally:
-        db.close()
         if logger:
             logger.info(
                 "increment active tasks count for session %s backend %s",
                 session_id,
                 session.backend if session else "None",
             )
+        db.close()
 
 def decrement_active_tasks_count(session_id: int, logger: logging.Logger = None):
     db = SessionLocal()
@@ -318,13 +318,13 @@ def decrement_active_tasks_count(session_id: int, logger: logging.Logger = None)
             session.active_tasks_count -= 1
             db.commit()
     finally:
-        db.close()
         if logger:
             logger.info(
                 "decrement active tasks count for session %s backend %s",
                 session_id,
                 session.backend if session else "None",
             )
+        db.close()
 
 def get_referral_bonus(user_id):
     db = SessionLocal()
