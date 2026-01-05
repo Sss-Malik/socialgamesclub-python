@@ -1242,7 +1242,7 @@ def action_create_account(page: Page, task_id, backend):
         )
         session = _login_and_navigate(page, logger, backend, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         for i in range(count):
             logger.info("Creating account %d of %d", i + 1, count)
             _create_single_account(page, logger, task_id)
@@ -1272,7 +1272,7 @@ def action_create_account(page: Page, task_id, backend):
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
 
@@ -1294,7 +1294,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct, coupon_code)
     except (PlaywrightTimeoutError, Exception) as e:
         restore_wallet_balance(wallet_id, amount_to_deduct, order_id, coupon_code)
@@ -1325,7 +1325,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1348,7 +1348,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, backend, ta
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update, freeplay_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1376,7 +1376,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, backend, ta
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1399,7 +1399,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id, order_id, requested_amount)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1427,7 +1427,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1448,7 +1448,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1476,7 +1476,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1490,13 +1490,17 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
     logger = get_backend_logger(BACKEND_NAME, LOGS_DIR)
     logger.info("Reset-password action started: account_id=%s", account_id)
 
+    session = None
+
     try:
         insert_log(
             "info",
             f"Initiating password reset for account ID {account_id} on backend '{BACKEND_NAME}'", source_url=str(page.url),
             backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id
         )
-        _login_and_navigate(page, logger, backend_game, task_id)
+        session = _login_and_navigate(page, logger, backend_game, task_id)
+        if session:
+            increment_active_tasks_count(session.id, logger)
         _reset_password(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1523,5 +1527,7 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
             account_id=backend_account.id,
         )
     finally:
+        if session:
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Reset-password action completed.")
         insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
