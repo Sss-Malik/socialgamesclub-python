@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 from datetime import datetime
 
@@ -291,8 +292,9 @@ def invalidate_latest_session(backend):
         db.close()
 
 
-def increment_active_tasks_count(session_id: int):
+def increment_active_tasks_count(session_id: int, logger: logging.Logger = None):
     db = SessionLocal()
+    session = None
     try:
         session = db.query(BackendSession).filter_by(id=session_id).first()
         if session:
@@ -300,10 +302,16 @@ def increment_active_tasks_count(session_id: int):
             db.commit()
     finally:
         db.close()
+        if logger:
+            logger.info(
+                "increment active tasks count for session %s backend %s",
+                session_id,
+                session.name if session else "None",
+            )
 
-
-def decrement_active_tasks_count(session_id: int):
+def decrement_active_tasks_count(session_id: int, logger: logging.Logger = None):
     db = SessionLocal()
+    session = None
     try:
         session = db.query(BackendSession).filter_by(id=session_id).first()
         if session and session.active_tasks_count and session.active_tasks_count > 0:
@@ -311,6 +319,12 @@ def decrement_active_tasks_count(session_id: int):
             db.commit()
     finally:
         db.close()
+        if logger:
+            logger.info(
+                "decrement active tasks count for session %s backend %s",
+                session_id,
+                session.name if session else "None",
+            )
 
 def get_referral_bonus(user_id):
     db = SessionLocal()

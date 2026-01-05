@@ -38,6 +38,42 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+
+            try:
+                # Element-UI message box is NOT a role="dialog", so rely on structure + text
+                notification = page.locator(
+                    "div.el-message-box"
+                ).filter(
+                    has_text="You have slightly low balance"
+                )
+
+                # Wait briefly — this dialog is usually fast if it appears
+                notification.wait_for(state="visible", timeout=2000)
+
+                # Click the OK button *within this message box only*
+                notification.locator("button", has_text="OK").click()
+
+                logger.info("Low balance notification detected and dismissed")
+
+            except PlaywrightTimeoutError:
+                # Notification did not appear — safe to continue
+                logger.info("Low balance notification not present, continuing.")
+
+            try:
+                password_change_dialog = page.get_by_role("dialog", name="Hint").filter(
+                    has_text="your account password has not been changed for a long time"
+                )
+                password_change_dialog.wait_for(state="visible", timeout=2000)
+                logger.info("Password change reminder dialog detected")
+
+                # Example action: click "Modify next time"
+                password_change_dialog.get_by_role(
+                    "button", name="Modify next time"
+                ).click()
+
+            except PlaywrightTimeoutError:
+                logger.info("Password change reminder dialog not present")
+
             try:
                 # 1. Define the dialog by Role + Name AND filter by the specific text content
                 # This resolves the strict mode violation by ignoring the other "Hint" dialog.
@@ -128,6 +164,42 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.info("Login successful, navigating to user management page.")
             ss = capture_and_upload_screenshot(page=page, backend=BACKEND_NAME, task_id=task_id)
             logger.debug(f"debug screenshot captured: {ss}")
+
+            try:
+                # Element-UI message box is NOT a role="dialog", so rely on structure + text
+                notification = page.locator(
+                    "div.el-message-box"
+                ).filter(
+                    has_text="You have slightly low balance"
+                )
+
+                # Wait briefly — this dialog is usually fast if it appears
+                notification.wait_for(state="visible", timeout=2000)
+
+                # Click the OK button *within this message box only*
+                notification.locator("button", has_text="OK").click()
+
+                logger.info("Low balance notification detected and dismissed")
+
+            except PlaywrightTimeoutError:
+                # Notification did not appear — safe to continue
+                logger.info("Low balance notification not present, continuing.")
+
+            try:
+                password_change_dialog = page.get_by_role("dialog", name="Hint").filter(
+                    has_text="your account password has not been changed for a long time"
+                )
+                password_change_dialog.wait_for(state="visible", timeout=2000)
+                logger.info("Password change reminder dialog detected")
+
+                # Example action: click "Modify next time"
+                password_change_dialog.get_by_role(
+                    "button", name="Modify next time"
+                ).click()
+
+            except PlaywrightTimeoutError:
+                logger.info("Password change reminder dialog not present")
+
             try:
                 # 1. Define the dialog by Role + Name AND filter by the specific text content
                 # This resolves the strict mode violation by ignoring the other "Hint" dialog.
@@ -195,6 +267,40 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         page.locator(MAIN_PAGE_EL).wait_for(timeout=20_000)
 
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+        try:
+            # Element-UI message box is NOT a role="dialog", so rely on structure + text
+            notification = page.locator(
+                "div.el-message-box"
+            ).filter(
+                has_text="You have slightly low balance"
+            )
+
+            # Wait briefly — this dialog is usually fast if it appears
+            notification.wait_for(state="visible", timeout=2000)
+
+            # Click the OK button *within this message box only*
+            notification.locator("button", has_text="OK").click()
+
+            logger.info("Low balance notification detected and dismissed")
+
+        except PlaywrightTimeoutError:
+            # Notification did not appear — safe to continue
+            logger.info("Low balance notification not present, continuing.")
+
+        try:
+            password_change_dialog = page.get_by_role("dialog", name="Hint").filter(
+                has_text="your account password has not been changed for a long time"
+            )
+            password_change_dialog.wait_for(state="visible", timeout=2000)
+            logger.info("Password change reminder dialog detected")
+
+            # Example action: click "Modify next time"
+            password_change_dialog.get_by_role(
+                "button", name="Modify next time"
+            ).click()
+
+        except PlaywrightTimeoutError:
+            logger.info("Password change reminder dialog not present")
 
         try:
             # 1. Define the dialog by Role + Name AND filter by the specific text content
@@ -220,6 +326,24 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
 
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
+    try:
+        # 1. Define the dialog by Role + Name AND filter by the specific text content
+        # This resolves the strict mode violation by ignoring the other "Hint" dialog.
+        dialog = page.get_by_role("dialog", name="Hint").filter(
+            has_text="To ensure the security of your account"
+        )
+
+        # 2. Wait for this specific dialog to be visible
+        dialog.wait_for(state="visible", timeout=3000)
+
+        # 3. Click the Confirm button inside this specific dialog
+        dialog.get_by_role("button", name="confirm").click()
+
+        logger.info("google authenticator bind dialog detected and closed")
+
+    except PlaywrightTimeoutError:
+        # Dialog did not appear — safe to continue
+        logger.info("google authenticator bind dialog not present, continuing.")
     logger.debug("Opening create account dialog.")
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
@@ -338,15 +462,45 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
             "//div[contains(@class,'el-form-item__content') and .//span[text()='Cancel']]//span[text()='OK']"
         ).click()
 
-        # wait for success confirmation
-        try:
-            alert = page.locator("div.el-message-box__message p, div.el-message.el-message--success p")
-            alert.wait_for(state="visible", timeout=25000)
-            text = alert.inner_text().strip().lower()
+        # Known response texts (normalized)
+        SUCCESS_TEXTS = ["sucessful operation", "successful operation"]
+        INSUFFICIENT_TEXT = "not authorized to check remaining balance"
 
-            # Default (unexpected) outcome
+        try:
+            # Wait until ANY known recharge response becomes visible
+            page.wait_for_function(
+                """() => {
+                    const knownTexts = [
+                        "sucessful operation",
+                        "successful operation",
+                        "not authorized to check remaining balance"
+                    ];
+
+                    return [...document.querySelectorAll("p")]
+                        .some(p => {
+                            const text = p.innerText?.toLowerCase() || "";
+                            const visible = p.offsetParent !== null;
+                            return visible && knownTexts.some(t => text.includes(t));
+                        });
+                }""",
+                timeout=25000
+            )
+
+            # Collect all visible <p> texts
+            visible_texts = [
+                p.inner_text().strip().lower()
+                for p in page.locator("p").all()
+                if p.is_visible()
+            ]
+
+            combined_text = " | ".join(visible_texts)
+
+            # ---------------- Default (unexpected) outcome ----------------
             log_type = "warning"
-            description = f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored"
+            description = (
+                f"Unexpected recharge response: {combined_text} "
+                f"on {BACKEND_NAME} - Wallet balance restored"
+            )
             order_status = "failed"
             automation_status = "failed"
             automation_result_fields = {
@@ -361,7 +515,8 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
 
             bonus_transferred = False
 
-            if "not authorized to check remaining balance" in text:
+            # ---------------- Backend balance insufficient ----------------
+            if any(INSUFFICIENT_TEXT in text for text in visible_texts):
                 send_email(
                     subject="Recharge failed",
                     body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
@@ -372,7 +527,13 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
                     "status": "failed",
                     "description": description
                 }
-            elif "sucessful operation" in text:
+
+            # ---------------- Success ----------------
+            elif any(
+                    success_text in text
+                    for text in visible_texts
+                    for success_text in SUCCESS_TEXTS
+            ):
                 logger.info("Recharge successful.")
                 log_type = "info"
                 description = f"Recharge successful for account {account_id}"
@@ -391,8 +552,9 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
                     bonus_transferred = True
 
             else:
-                logger.warning(f"Unexpected recharge response: {text}")
+                logger.warning(f"Unexpected recharge response: {combined_text}")
 
+            # ---------------- Persist result ----------------
             process_recharge_operation(
                 order_id=order_id,
                 task_id=task_id,
@@ -543,30 +705,67 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
             "//div[contains(@class,'el-form-item__content') and .//span[text()='Cancel']]//span[text()='OK']"
         ).click()
 
-        # wait for success confirmation
-        try:
-            alert = page.locator("div.el-message-box__message p, div.el-message.el-message--success p")
-            alert.wait_for(state="visible", timeout=25000)
-            text = alert.inner_text().strip().lower()
+        # Known response texts (normalized to lowercase)
+        SUCCESS_TEXTS = ["sucessful operation", "successful operation"]
+        INSUFFICIENT_TEXT = "not authorized to check remaining balance"
 
-            # Default values
+        try:
+            # Wait until ANY known recharge response becomes visible
+            page.wait_for_function(
+                """() => {
+                    const knownTexts = [
+                        "sucessful operation",
+                        "successful operation",
+                        "not authorized to check remaining balance"
+                    ];
+
+                    return [...document.querySelectorAll("p")]
+                        .some(p => {
+                            const text = p.innerText?.toLowerCase() || "";
+                            const visible = p.offsetParent !== null;
+                            return visible && knownTexts.some(t => text.includes(t));
+                        });
+                }""",
+                timeout=25000
+            )
+
+            # Collect all visible <p> texts for deterministic evaluation
+            visible_texts = [
+                p.inner_text().strip().lower()
+                for p in page.locator("p").all()
+                if p.is_visible()
+            ]
+
+            combined_text = " | ".join(visible_texts)
+
+            # Default values (unchanged behavior)
             log_type = "warning"
-            description = f"Unexpected recharge response: {text}"
+            description = f"Unexpected recharge response: {combined_text}"
             result_status = "failed"
 
-            if "not authorized to check remaining balance" in text:
+            # ---- Failure: Backend balance insufficient ----
+            if any(INSUFFICIENT_TEXT in text for text in visible_texts):
                 logger.error("Recharge failed: backend balance insufficient.")
                 send_email(
                     subject="Recharge failed",
-                    body=f"Recharge failed for account: {account_id} because of insufficient balance on {BACKEND_NAME}.",
+                    body=(
+                        f"Recharge failed for account: {account_id} "
+                        f"because of insufficient balance on {BACKEND_NAME}."
+                    ),
                 )
                 description = f"Insufficient backend balance for {BACKEND_NAME}"
 
-            elif "sucessful operation" in text:
+            # ---- Success ----
+            elif any(
+                    success_text in text
+                    for text in visible_texts
+                    for success_text in SUCCESS_TEXTS
+            ):
                 logger.info("Recharge successful.")
                 log_type = "info"
                 description = f"Freeplay Recharge successful for account: {account_id}"
                 result_status = "success"
+
                 process_freeplay_operation(
                     t=t,
                     username=account_id,
@@ -576,8 +775,9 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
                     freeplay_id=freeplay_id,
                     id_to_update=id_to_update,
                 )
+
             else:
-                logger.warning(f"Unexpected recharge response: {text}")
+                logger.warning(f"Unexpected recharge response: {combined_text}")
 
             insert_log_and_update_automation_result(
                 log_type=log_type,
@@ -589,6 +789,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
                 result_status=result_status,
                 result_description=description,
             )
+
         except PlaywrightTimeoutError:
             logger.exception("No dialog appeared after setting score.")
             insert_log_and_update_automation_result(
@@ -601,7 +802,9 @@ def _freeplay_account(page: Page, logger: logging.Logger, points: int, account_i
                 result_status="failed",
                 result_description=f"Failed to detect result after recharge on {BACKEND_NAME}",
             )
+
         break
+
 
 def _read_account(page: Page, logger: logging.Logger, account_id: str, task_id):
     logger.info(f"Reading account info: {account_id}")
@@ -736,14 +939,42 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             "//div[contains(@class,'el-form-item__content') and .//span[text()='Cancel']]//span[text()='OK']"
         ).click()
 
-        try:
-            err = page.locator("p.el-message__content")
-            err.wait_for(state="visible", timeout=3000)
-            text = err.inner_text().strip().lower()
+        # Known response texts (normalized)
+        SUCCESS_TEXTS = ["sucessful operation", "successful operation"]
+        INSUFFICIENT_TEXT = "cannot exceed current points"
 
-            # Default values
+        try:
+            # Wait until ANY known withdrawal response becomes visible
+            page.wait_for_function(
+                """() => {
+                    const knownTexts = [
+                        "sucessful operation",
+                        "successful operation",
+                        "cannot exceed current points"
+                    ];
+
+                    return [...document.querySelectorAll("p")]
+                        .some(p => {
+                            const text = p.innerText?.toLowerCase() || "";
+                            const visible = p.offsetParent !== null;
+                            return visible && knownTexts.some(t => text.includes(t));
+                        });
+                }""",
+                timeout=3000
+            )
+
+            # Collect all visible <p> texts
+            visible_texts = [
+                p.inner_text().strip().lower()
+                for p in page.locator("p").all()
+                if p.is_visible()
+            ]
+
+            combined_text = " | ".join(visible_texts)
+
+            # ---------------- Default values (unexpected / safe failure) ----------------
             log_type = "warning"
-            description = f"Unexpected withdrawal response: {text}"
+            description = f"Unexpected withdrawal response: {combined_text}"
             result_status = "failed"
             redeem_request_status = "failed"
 
@@ -751,11 +982,17 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
             add_to_wallet = False
             add_to_wallet_amount = requested_amount
 
-            if "cannot exceed current points" in text:
+            # ---------------- Insufficient balance ----------------
+            if any(INSUFFICIENT_TEXT in text for text in visible_texts):
                 logger.error("Withdrawal failed due to insufficient gold.")
                 description = "Insufficient customer balance."
 
-            elif "sucessful operation" in text:
+            # ---------------- Success ----------------
+            elif any(
+                    success_text in text
+                    for text in visible_texts
+                    for success_text in SUCCESS_TEXTS
+            ):
                 logger.info("Withdraw successful.")
                 log_type = "info"
                 description = f"Withdrawal successful for account: {account_id}"
@@ -764,9 +1001,11 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
 
                 wallet_detail_status = "finished"
                 add_to_wallet = True
-            else:
-                logger.warning(f"Unexpected withdrawal response: {text}")
 
+            else:
+                logger.warning(f"Unexpected withdrawal response: {combined_text}")
+
+            # ---------------- Persist result ----------------
             insert_log_and_update_automation_result(
                 log_type=log_type,
                 log_description=description,
@@ -783,6 +1022,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 add_to_wallet=add_to_wallet,
                 add_to_wallet_amount=add_to_wallet_amount,
             )
+
         except PlaywrightTimeoutError:
             logger.exception("No dialog appeared after setting score.")
             insert_log_and_update_automation_result(
@@ -800,6 +1040,7 @@ def _withdraw_account(page: Page, logger: logging.Logger, points: int, account_i
                 wallet_detail_status="failed",
                 add_to_wallet=False,
             )
+
         break
 
 
@@ -874,27 +1115,66 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
         ok_btn = msg_box.get_by_role("button", name="OK")
         ok_btn.click()
 
-        try:
-            result = page.locator("p.el-message__content")
-            result.wait_for(state="visible", timeout=5000)
-            text = result.inner_text().strip().lower()
+        # Known response texts (normalized)
+        SUCCESS_TEXTS = ["sucessful operation", "successful operation"]
 
-            # Default values
+        try:
+            # Wait until ANY known password reset response becomes visible
+            page.wait_for_function(
+                """() => {
+                    const knownTexts = [
+                        "sucessful operation",
+                        "successful operation"
+                    ];
+
+                    return [...document.querySelectorAll("p")]
+                        .some(p => {
+                            const text = p.innerText?.toLowerCase() || "";
+                            const visible = p.offsetParent !== null;
+                            return visible && knownTexts.some(t => text.includes(t));
+                        });
+                }""",
+                timeout=5000
+            )
+
+            # Collect all visible <p> texts
+            visible_texts = [
+                p.inner_text().strip().lower()
+                for p in page.locator("p").all()
+                if p.is_visible()
+            ]
+
+            combined_text = " | ".join(visible_texts)
+
+            # ---------------- Default values (safe failure) ----------------
             log_type = "warning"
-            description = f"Password reset failed. Unhandled reset response: {text}"
+            description = f"Password reset failed. Unhandled reset response: {combined_text}"
             result_data: dict | None = None
             result_status = "failed"
 
-            if "sucessful operation" in text:
+            # ---------------- Success ----------------
+            if any(
+                    success_text in text
+                    for text in visible_texts
+                    for success_text in SUCCESS_TEXTS
+            ):
                 logger.info("Password reset successful.")
                 log_type = "info"
                 description = f"Password reset successful for account {account_id}"
                 result_data = {"password": password}
                 result_status = "success"
-                update_password_by_username(username=account_id, new_password=password)
-            else:
-                logger.warning(f"Password reset failed. Unhandled reset response: {text}")
 
+                update_password_by_username(
+                    username=account_id,
+                    new_password=password
+                )
+
+            else:
+                logger.warning(
+                    f"Password reset failed. Unhandled reset response: {combined_text}"
+                )
+
+            # ---------------- Persist result ----------------
             insert_log_and_update_automation_result(
                 log_type=log_type,
                 log_description=description,
@@ -906,6 +1186,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
                 result_description=description,
                 result_data=result_data,
             )
+
         except PlaywrightTimeoutError:
             logger.warning("Password reset failed. Failed to detect result after reset")
             insert_log_and_update_automation_result(
@@ -918,6 +1199,7 @@ def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id
                 result_status="failed",
                 result_description="Failed to detect reset response",
             )
+
         break
 
 
@@ -939,7 +1221,7 @@ def action_create_account(page: Page, task_id, backend):
         )
         session = _login_and_navigate(page, logger, backend, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         for i in range(count):
             logger.info("Creating account %d of %d", i + 1, count)
             _create_single_account(page, logger, task_id)
@@ -969,7 +1251,7 @@ def action_create_account(page: Page, task_id, backend):
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Create-account action completed.")
         insert_log("info", "Create account action completed", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
 
@@ -991,7 +1273,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _recharge_account(page, logger, count, account_id, order_id, task_id, wallet_id, amount_to_deduct, coupon_code)
     except (PlaywrightTimeoutError, Exception) as e:
         restore_wallet_balance(wallet_id, amount_to_deduct, order_id, coupon_code)
@@ -1021,7 +1303,7 @@ def action_recharge_account(page: Page, count: int, account_id: str, order_id, t
             account_id=backend_account.id,
         )
     finally:
-        decrement_active_tasks_count(session.id)
+        decrement_active_tasks_count(session.id, logger)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1044,7 +1326,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _freeplay_account(page, logger, count, account_id, task_id, t, id_to_update, freeplay_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1072,7 +1354,7 @@ def action_freeplay_account(page: Page, count: int, account_id: str, task_id, ba
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Recharge-account action completed.")
         insert_log("info", "Recharge account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1096,7 +1378,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _withdraw_account(page, logger, count, account_id, task_id, redeem_request_id, order_id, requested_amount)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1124,7 +1406,7 @@ def action_withdraw_account(page: Page, count: int, account_id: str, task_id, ba
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Withdraw-account action completed.")
         insert_log("info", "Withdrawal account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1145,7 +1427,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
 
         _read_account(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
@@ -1174,7 +1456,7 @@ def action_read_account(page: Page, account_id: str, task_id, backend):
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Read-account action completed.")
         insert_log("info", "Read account action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
 
@@ -1198,7 +1480,7 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
         )
         session = _login_and_navigate(page, logger, backend_game, task_id)
         if session:
-            increment_active_tasks_count(session.id)
+            increment_active_tasks_count(session.id, logger)
         _reset_password(page, logger, account_id, task_id)
     except (PlaywrightTimeoutError, Exception) as e:
         screenshot_url = capture_and_upload_screenshot(
@@ -1226,6 +1508,6 @@ def action_reset_password(page: Page, account_id: str, task_id, backend):
         )
     finally:
         if session:
-            decrement_active_tasks_count(session.id)
+            decrement_active_tasks_count(session.id, logger)
         logger.info("Reset-password action completed.")
         insert_log("info", "Reset password action completed", source_url=str(page.url), backend_id=backend_game.id, account_id=backend_account.id, task_id=task_id)
