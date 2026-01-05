@@ -583,7 +583,7 @@ def _freeplay_account(page: Page, logger: logging.Logger, count: int, account_id
 def _reset_password(page: Page, logger: logging.Logger, account_id: str, task_id: str):
     logger.info(f"Initiating Reset password: account_id={account_id}")
     _ = get_backend_account(account_id)
-    __, password = generate_credentials()
+    __, password = generate_credentials(use_special_char=True)
 
     main_iframe = page.frame_locator(MAIN_IFRAME)
 
