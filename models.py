@@ -1,6 +1,6 @@
 # casino_automation/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP, Float, CHAR, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, ForeignKey, DateTime, func, BigInteger, DECIMAL, TIMESTAMP, Float, CHAR, JSON, UniqueConstraint
+from sqlalchemy.orm import relationship, Session
 from db import Base
 from datetime import datetime
 import enum
@@ -26,6 +26,26 @@ class BackendGame(Base):
     automation_results = relationship("AutomationResult", back_populates="backend")
     logs = relationship("Log", back_populates="backend")
     freeplays = relationship("Freeplay", back_populates="backend")
+
+
+class BackendBalance(Base):
+    __tablename__ = "backend_balances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backend_id = Column(
+        Integer,
+        ForeignKey("backend_games.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True
+    )
+    remaining_balance = Column(DECIMAL(10, 2), nullable=False, default=0)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    backend = relationship("BackendGame", backref="balance")
+    __table_args__ = (
+        UniqueConstraint("backend_id", name="uq_backend_balance_backend_id"),
+    )
 
 
 class BackendAccount(Base):
@@ -271,7 +291,7 @@ class AutomationRequest(Base):
     )
 
     type = Column(
-        Enum("create", "recharge", "freeplay", "withdraw", "read", "reset-password", name="request_type"),
+        Enum("create", "recharge", "freeplay", "withdraw", "read", "reset-password", "read-backend", name="request_type"),
         nullable=False
     )
 
