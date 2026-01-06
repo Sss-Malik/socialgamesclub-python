@@ -13,8 +13,6 @@ def invoke_action(self, backend: str, action: str, **kwargs):
     try:
         kwargs["task_id"] = task_id
         return invoke_backend_action(backend, action, **kwargs)
-    except Exception as exc:
-        raise self.retry(exc=exc, countdown=2 ** self.request.retries, max_retries=3)
     finally:
         end_ts = datetime.utcnow()
         duration = (end_ts - start_ts).total_seconds()
