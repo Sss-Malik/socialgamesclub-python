@@ -13,6 +13,8 @@ from sqlalchemy import desc, func
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import or_
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.exc import SQLAlchemyError
+
 def get_backend(name):
     db = SessionLocal()
     try:
@@ -295,35 +297,72 @@ def invalidate_latest_session(backend):
 
 def increment_active_tasks_count(session_id: int, logger: logging.Logger = None):
     db = SessionLocal()
-    session = None
+    backend_name = "None"  # Capture this early to avoid detached instance errors later
     try:
-        session = db.query(BackendSession).filter_by(id=session_id).first()
+        # with_for_update() locks the row for this transaction
+        session = db.query(BackendSession).filter_by(id=session_id).with_for_update().first()
+
         if session:
-            session.active_tasks_count = (session.active_tasks_count or 0) + 1
+            # Safely capture backend name while session is active and object is attached
+            backend_name = session.backend
+
+            # Handle None case for active_tasks_count safely
+            current_count = session.active_tasks_count or 0
+            if logger:
+                logger.info(
+                    "[before increment]current session details for %s: active_tasks_count=%d, session_id=%s",
+                    backend_name,
+                    current_count,
+                    session_id
+                )
+            session.active_tasks_count = current_count + 1
             db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        if logger:
+            logger.error(f"Error incrementing tasks for session {session_id}: {e}")
+        raise
     finally:
         if logger:
             logger.info(
                 "increment active tasks count for session %s backend %s",
                 session_id,
-                session.backend if session else "None",
+                backend_name,
             )
         db.close()
 
+
 def decrement_active_tasks_count(session_id: int, logger: logging.Logger = None):
     db = SessionLocal()
-    session = None
+    backend_name = "None"
     try:
-        session = db.query(BackendSession).filter_by(id=session_id).first()
-        if session and session.active_tasks_count and session.active_tasks_count > 0:
-            session.active_tasks_count -= 1
-            db.commit()
+        # with_for_update() locks the row for this transaction
+        session = db.query(BackendSession).filter_by(id=session_id).with_for_update().first()
+
+        if session:
+            backend_name = session.backend
+            if logger:
+                logger.info(
+                    "[before decrement] current session details for %s: active_tasks_count=%d, session_id=%s",
+                    backend_name,
+                    session.active_tasks_count or 0,
+                    session_id
+                )
+            # Check logic inside the lock to ensure consistency
+            if session.active_tasks_count and session.active_tasks_count > 0:
+                session.active_tasks_count -= 1
+                db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        if logger:
+            logger.error(f"Error decrementing tasks for session {session_id}: {e}")
+        raise
     finally:
         if logger:
             logger.info(
                 "decrement active tasks count for session %s backend %s",
                 session_id,
-                session.backend if session else "None",
+                backend_name,
             )
         db.close()
 
