@@ -22,11 +22,11 @@ UTILS_DIR = BASE_DIR / "utils"
 
 
 # Selectors
-LOGIN_ACCOUNT = 'input[placeholder="username"]'
-LOGIN_PASSWORD = 'input[placeholder="password"]'
+LOGIN_ACCOUNT = 'input[placeholder="Username"]'
+LOGIN_PASSWORD = 'input[placeholder="Password"]'
 CAPTCHA_IMG = "img.imgCode"
 CAPTCHA_INPUT = "div.loginCode input"
-LOGIN_BUTTON = 'button:has-text("Sign in")'
+LOGIN_BUTTON = 'button:has-text("Login")'
 MAIN_PAGE_EL = 'button:has-text("Log out")'
 CREATE_ACCOUNT_INIT = 'button:has-text("New Account")'
 ACCOUNT_ID = "label:has-text('Account') ~ .el-form-item__content input.el-input__inner"

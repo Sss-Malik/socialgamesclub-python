@@ -39,6 +39,17 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
     page.goto(login_url, wait_until="domcontentloaded")
+    
+    page.add_style_tag(content="""
+            *,
+            *::before,
+            *::after {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+            }
+        """
+    )
 
     try:
         page.wait_for_selector(".el-message__content", timeout=2000)
