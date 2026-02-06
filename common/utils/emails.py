@@ -4,6 +4,7 @@ import ssl
 from email.message import EmailMessage
 from typing import Any, Iterable, Mapping, Union
 import traceback
+import base64
 
 from common.utils.db_actions import insert_log
 from settings import (
@@ -48,6 +49,13 @@ def _format_body(body: BodyType) -> str:
 
     # Fallback: stringify
     return str(body)
+
+
+
+def auth_login(server, username, password):
+    server.docmd("AUTH", "LOGIN")
+    server.docmd(base64.b64encode(username.encode()).decode())
+    server.docmd(base64.b64encode(password.encode()).decode())
 
 
 def send_email(
@@ -113,14 +121,13 @@ def send_email(
     try:
         context = ssl.create_default_context()
 
-        with smtplib.SMTP(MAIL_HOST, int(MAIL_PORT), timeout=timeout) as server:
+        with smtplib.SMTP(MAIL_HOST, MAIL_PORT, timeout=20) as server:
+            server.set_debuglevel(1)
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
             server.ehlo()
 
-            if MAIL_ENCRYPTION and MAIL_ENCRYPTION.lower() == "tls":
-                server.starttls(context=context)
-                server.ehlo()
-
-            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            auth_login(server, MAIL_USERNAME, MAIL_PASSWORD)
             server.send_message(msg)
 
     except Exception as exc:
