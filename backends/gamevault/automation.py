@@ -40,16 +40,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     page.goto(login_url, wait_until="domcontentloaded")
     
-    page.add_style_tag(content="""
-            *,
-            *::before,
-            *::after {
-            animation: none !important;
-            transition: none !important;
-            transform: none !important;
-            }
-        """
-    )
+
 
     try:
         page.wait_for_selector(".el-message__content", timeout=2000)
@@ -74,6 +65,16 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     btn  = page.locator(LOGIN_BUTTON)
 
     for attempt in range(MAX_CAPTCHA_RETRIES):
+        page.add_style_tag(content="""
+                    *,
+                    *::before,
+                    *::after {
+                    animation: none !important;
+                    transition: none !important;
+                    transform: none !important;
+                    }
+                """
+        )
         logger.debug(f"Login attempt #{attempt + 1}")
 
         acct.fill(username)
