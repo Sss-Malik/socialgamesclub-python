@@ -84,6 +84,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         if DEBUG:
             input("Debug mode: Solve CAPTCHA manually and press enter.")
         else:
+            page.wait_for_timeout(2000)
             text, solver = handle_captcha(page, logger, CAPTCHA_IMG, CAPTCHA_DIR)
             if not text or text == 0:
                 logger.warning("CAPTCHA solver returned empty or 0 value: %s", text)
