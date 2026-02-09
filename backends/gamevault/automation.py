@@ -136,18 +136,19 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
     while True:
         delay = random.randint(1000, 5000)
         page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
-        page.locator(ACCOUNT_ID).wait_for(timeout=10_000)
+        create_account_dialog = page.get_by_role("dialog", name="Essential information")
+        create_account_dialog.locator(ACCOUNT_ID).wait_for(timeout=10_000)
 
         account_id, password = generate_credentials()
         logger.debug(f"Generated credentials: {account_id} / {password}")
 
-        page.locator(ACCOUNT_ID).fill(account_id)
-        page.locator(ACCOUNT_PASSWORD).fill(password)
-        page.locator(CONFIRM_PASSWORD).fill(password)
+        create_account_dialog.locator(ACCOUNT_ID).fill(account_id)
+        create_account_dialog.locator(ACCOUNT_PASSWORD).fill(password)
+        create_account_dialog.locator(CONFIRM_PASSWORD).fill(password)
         page.wait_for_timeout(delay)
 
 
-        page.locator(CREATE_ACCOUNT).click()
+        create_account_dialog.locator(CREATE_ACCOUNT).click()
 
         page.wait_for_timeout(1000)
 
@@ -175,21 +176,50 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
             continue
 
         try:
-            dlg = page.locator(".el-dialog:has(#invoiceModel)")
-            dlg.wait_for(timeout=10000, state="visible")
-            text = dlg.inner_text().strip().lower()
-            if "successfully" in text:
+            dlg = page.locator(
+                ".el-dialog.el-dialog--center:has(.invoice-content)"
+            )
+            dlg.wait_for(state="visible", timeout=10000)
+
+            invoice_content = dlg.locator(".invoice-content")
+            text = invoice_content.inner_text().strip().lower()
+
+            if "successfully" in text and "copy" in text:
                 logger.info("Account created successfully: %s", account_id)
+
+                # Optional: extract credentials safely
+                info = dlg.locator(".invoice-info").inner_text()
+                logger.debug("Invoice info:\n%s", info)
+
                 save_credentials(account_id, password, logger, DATA_DIR)
-                insert_backend_account(username=account_id, password=password, backend_id=BACKEND_ID)
+                insert_backend_account(
+                    username=account_id,
+                    password=password,
+                    backend_id=BACKEND_ID
+                )
+
                 page.wait_for_timeout(delay)
                 break
+
             else:
-                logger.warning(f"Unexpected message after creating account: {text}")
-                insert_log("warning", f"Unexpected create account response: {text}", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
+                logger.warning("Unexpected message after creating account: %s", text)
+                insert_log(
+                    "warning",
+                    f"Unexpected create account response: {text}",
+                    source_url=str(page.url),
+                    backend_id=BACKEND_ID,
+                    task_id=task_id
+                )
+
         except PlaywrightTimeoutError:
-            logger.error("Failed to detect result dialog after account creation.")
-            insert_log("warning", "Failed to detect dialog after creating account", source_url=str(page.url), backend_id=BACKEND_ID, task_id=task_id)
+            logger.error("Failed to detect invoice modal after account creation.")
+            insert_log(
+                "warning",
+                "Failed to detect invoice modal after creating account",
+                source_url=str(page.url),
+                backend_id=BACKEND_ID,
+                task_id=task_id
+            )
             break
 
 
