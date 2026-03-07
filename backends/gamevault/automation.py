@@ -384,7 +384,7 @@ def _recharge_account(page: Page, logger: logging.Logger, amount: int, account_i
             logger.warning(f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored")
             description = f"Unexpected recharge response: {text} on {BACKEND_NAME} - Wallet balance restored"
             automation_result_fields = {
-                "status": "success",
+                "status": "failed",
                 "description": description,
             }
             should_process = True
