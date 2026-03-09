@@ -27,7 +27,8 @@ from common.utils.db_actions import (
     get_automation_result,
     insert_automation_request,
     get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance, insert_automation_result_and_request,
-    check_coupon_validity_and_return_amount
+    check_coupon_validity_and_return_amount,
+    get_latest_manual_freeplay
 )
 
 # ---- App setup ----
@@ -337,6 +338,14 @@ async def recharge_freeplay(
         if not user.freeplay_amount:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "This user is not eligible for signup freeplay")
         count = user.freeplay_amount
+        
+    elif t == "manual_freeplay":
+        manual_freeplay = get_latest_manual_freeplay(user.id)
+        if not manual_freeplay:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid manual freeplay requested")
+        count = manual_freeplay.amount
+        id_to_update = manual_freeplay.id
+        
 
     # count must be present by here
     return _enqueue_action(
