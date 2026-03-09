@@ -7,7 +7,7 @@ from common.utils.notify import serialize_model, notify_webhook_async
 from db import SessionLocal
 from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, BackendSession, ReferralBonus, \
     WheelSpin, RedeemRequest, AutomationRequest, PersonalAccessToken, User, WalletMaster, WalletDetail, Freeplay, \
-    Coupon, BackendBalance
+    Coupon, BackendBalance, ManualFreeplay
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 from fastapi.encoders import jsonable_encoder
@@ -403,7 +403,18 @@ def get_spin(user_id):
         return db.query(WheelSpin).options(joinedload(WheelSpin.user)).filter(WheelSpin.user_id == user_id).order_by(desc(WheelSpin.created_at)).first()
     finally:
         db.close()
-
+        
+def get_latest_manual_freeplay(user_id):
+    with SessionLocal() as db:
+        return (
+            db.query(ManualFreeplay)
+            .filter(ManualFreeplay.user_id == user_id)
+            .filter(ManualFreeplay.status == "pending")
+            .order_by(ManualFreeplay.id.desc())
+            .first()
+        )
+    
+    
 def mark_spin_status(spin_id, status):
     db = SessionLocal()
     try:
@@ -971,6 +982,13 @@ def process_freeplay_operation(
                 raise ValueError(f"WheelSpin not found for id={id_to_update}")
 
             spin.status = "success"
+            
+        elif t == "manual_freeplay":
+            manual_freeplay = db.query(ManualFreeplay).filter(ManualFreeplay.id == id_to_update).first()
+            if not manual_freeplay:
+                raise ValueError(f"Manual freeplay not found for id={id_to_update}")
+            
+            manual_freeplay.status = "success"
 
         else:
             raise ValueError(f"Unknown freeplay operation type: '{t}'")

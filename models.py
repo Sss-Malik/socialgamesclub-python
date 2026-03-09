@@ -430,3 +430,17 @@ class Coupon(Base):
 
     # Optional relationship
     user = relationship("User", back_populates="coupons")
+    
+    
+class ManualFreeplay(Base):
+    __tablename__ = "manual_freeplays"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(DECIMAL(10, 2), default=0)
+    status = Column(String, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # relationship (optional)
+    user = relationship("User", backref="manual_freeplays")
