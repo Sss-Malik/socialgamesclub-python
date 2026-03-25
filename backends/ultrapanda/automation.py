@@ -436,6 +436,47 @@ def _recharge_account(page: Page, logger: logging.Logger, points: int, account_i
         except PlaywrightTimeoutError:
             logger.info("No error message, proceeding…")
 
+        table = page.locator(
+            "div.el-table",
+            has=page.locator("th", has_text="Connect game provider UID")
+        ).first
+
+        table.wait_for(timeout=10000)
+
+        row = table.locator(
+            "tbody tr",
+            has=page.locator("td:nth-child(2) .cell", has_text=account_id)
+        ).first
+
+        row.wait_for(timeout=5000)
+        balance = row.locator("td:nth-child(10) .cell span").inner_text().strip()
+        logger.info(f"Available balance: {balance}")
+        if float(balance) > 20:
+            logger.info(f"Available balance is not recharge eligible. Aborting")
+            process_recharge_operation(
+                order_id=order_id,
+                task_id=task_id,
+                account_id=_.id,
+                backend_id=BACKEND_ID,
+                page_url=str(page.url),
+                log_data={
+                    "type": "warning",
+                    "description": f"Customer balance ineligible for recharge: {balance}"
+                },
+                order_status="failed",
+                automation_status="failed",
+                automation_result_fields={"status": "failed",
+                                          "description": "Customer balance ineligible for recharge"},
+                wallet_status="failed",
+                restore_wallet=True,
+                amount_to_restore=amount_to_deduct,
+                wallet_id=wallet_id,
+                bonus_transferred=False,
+                restore_coupon=True,
+                coupon_code=coupon_code
+            )
+            return
+
 
         # open the score‐setting UI
         click_set_score(page, account_id, logger)

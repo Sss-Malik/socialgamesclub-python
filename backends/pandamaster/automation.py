@@ -168,6 +168,44 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
 
     # Click “Update” then “Recharge” via your helper
     click_update_for_account(frame, account_id, logger)
+
+    table = main_frame.locator("table#item")
+    table.wait_for(timeout=5000, state="visible")
+
+    row = table.locator(
+        f"//tr[contains(@class, 'list')][td[3][normalize-space(text())='{account_id}']]"
+    ).first
+    row.wait_for(timeout=5000)
+    if row.is_visible():
+        balance = row.locator("td:nth-child(5)").inner_text().strip()
+        logger.info(f"Account balance: {balance}")
+        if float(balance) > 20:
+            logger.info(f"Available balance is not recharge eligible. Aborting")
+            process_recharge_operation(
+                order_id=order_id,
+                task_id=task_id,
+                account_id=_.id,
+                backend_id=BACKEND_ID,
+                page_url=str(page.url),
+                log_data={
+                    "type": "warning",
+                    "description": f"Customer balance ineligible for recharge: {balance}"
+                },
+                order_status="failed",
+                automation_status="failed",
+                automation_result_fields={"status": "failed",
+                                          "description": "Customer balance ineligible for recharge"},
+                wallet_status="failed",
+                restore_wallet=True,
+                amount_to_restore=amount_to_deduct,
+                wallet_id=wallet_id,
+                bonus_transferred=False,
+                restore_coupon=True,
+                coupon_code=coupon_code
+            )
+            return
+
+
     main_frame.locator("a", has_text="Recharge").click(timeout=5000)
 
     # Fill the recharge amount
