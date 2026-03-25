@@ -377,6 +377,34 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     # call your existing helper (which still expects a Frame object)
     frame_el = page.locator(MAIN_IFRAME).element_handle()
     frame_obj = frame_el.content_frame()
+    row = click_account_action(frame_obj, account_id, "read", logger)
+    balance = row.locator("td[data-field='score']").inner_text().strip()
+    logger.info(f"Available balance: {balance}")
+    if float(balance) > 20:
+        logger.info("Available balance is not recharge eligible. Aborting")
+        process_recharge_operation(
+            order_id=order_id,
+            task_id=task_id,
+            account_id=_.id,
+            backend_id=BACKEND_ID,
+            page_url=str(page.url),
+            log_data={
+                "type": "warning",
+                "description": f"Customer balance ineligible for recharge: {balance}"
+            },
+            order_status="failed",
+            automation_status="failed",
+            automation_result_fields={"status": "failed",
+                                      "description": "Customer balance ineligible for recharge"},
+            wallet_status="failed",
+            restore_wallet=True,
+            amount_to_restore=amount_to_deduct,
+            wallet_id=wallet_id,
+            bonus_transferred=False,
+            restore_coupon=True,
+            coupon_code=coupon_code
+        )
+        return
     click_account_action(frame_obj, account_id, "recharge", logger)
 
     # fill & submit recharge form

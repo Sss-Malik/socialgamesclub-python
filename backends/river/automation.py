@@ -110,6 +110,41 @@ def _recharge_account(page: Page, logger: logging.Logger, count: int, account_id
     acc_sr.fill(account_id)
     page.locator('button:has-text("Search")').click()
 
+    row = page.locator(
+        "#table-accounts tbody tr[rel='account']"
+    ).filter(
+        has=page.locator(f"td:nth-child(2) span.label:text('{account_id}')")
+    ).first
+
+    row.wait_for(timeout=5000)
+    balance = row.locator("td:nth-child(6) code[rel='total_wins']").inner_text().strip()
+    logger.info(f"Available balance: {balance}")
+    if float(balance) > 20:
+        logger.warning("Available balance is not recharge eligible")
+        process_recharge_operation(
+            order_id=order_id,
+            task_id=task_id,
+            account_id=_.id,
+            backend_id=BACKEND_ID,
+            page_url=str(page.url),
+            log_data={
+                "type": "warning",
+                "description": f"Customer balance ineligible for recharge: {balance}"
+            },
+            order_status="failed",
+            automation_status="failed",
+            automation_result_fields={"status": "failed",
+                                      "description": "Customer balance ineligible for recharge"},
+            wallet_status="failed",
+            restore_wallet=True,
+            amount_to_restore=amount_to_deduct,
+            wallet_id=wallet_id,
+            bonus_transferred=False,
+            restore_coupon=True,
+            coupon_code=coupon_code
+        )
+        return
+
     click_purchase_for_account(page, account_id, logger)
     page.wait_for_timeout(2_000)
 
