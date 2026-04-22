@@ -52,6 +52,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
                 logger.info("Session still valid; skipping login.")
                 page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+                page.reload(wait_until="domcontentloaded")     
                 return
     except PlaywrightTimeoutError:
         if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
