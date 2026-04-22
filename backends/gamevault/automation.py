@@ -140,6 +140,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
     logger.info("Login successful, navigating to user management page.")
     page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+    page.reload(wait_until="domcontentloaded")
     logger.info("Login and navigation successful.")
 
 
