@@ -114,6 +114,27 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             logger.info("Login likely successful (no error dialog detected).")
             break
 
+        try:
+            timeout_dialog = page.locator("div.el-message-box[aria-label='Login timeout']")
+            timeout_dialog.wait_for(timeout=10000, state="visible")
+
+            message_text = timeout_dialog.inner_text().strip().lower()
+
+            if "login message timed out" in message_text:
+                logger.warning("Login timeout detected. Re-authenticating...")
+
+                confirm_btn = timeout_dialog.locator("button.el-button--primary")
+                confirm_btn.click()
+
+                # Wait for redirect back to login page
+                page.wait_for_load_state("domcontentloaded")
+
+                continue  # retry login flow
+
+        except PlaywrightTimeoutError:
+            # No timeout dialog appeared — proceed normally
+            pass
+
     logger.debug("Waiting for main page element after login.")
     page.locator(MAIN_PAGE_EL).wait_for(timeout=60000)
 
