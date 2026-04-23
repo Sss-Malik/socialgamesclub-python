@@ -39,26 +39,35 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     logger.debug("Navigating to login page at: %s", LOGIN_URL)
 
     page.goto(login_url, wait_until="domcontentloaded")
-    
 
+    current_url = page.url.lower()
 
-    try:
-        page.wait_for_selector(".el-message__content", timeout=2000)
-        msgs = page.locator(".el-message__content").all_text_contents()
-        if any(kw in msg.lower() for msg in msgs for kw in ("please login", "timeout", "expired")):
-            logger.info("Detected expired session message; forcing login form.")
+    if "login" in current_url:
+        logger.info("Redirected to login page; session is invalid.")
+        page.goto(LOGIN_PAGE_URL, wait_until="domcontentloaded")
+
+    elif "homedetail" in current_url:
+        logger.info("Landed on HomeDetail; checking for login timeout dialog.")
+
+        timeout_dialog = page.locator('div[aria-label="Login timeout"]')
+        confirm_button = timeout_dialog.locator('button:has-text("confirm")')
+
+        try:
+            timeout_dialog.wait_for(state="visible", timeout=5000)
+            logger.info("Login timeout dialog detected; confirming and forcing login.")
+            confirm_button.click()
+            page.wait_for_load_state("domcontentloaded")
             page.goto(LOGIN_PAGE_URL, wait_until="domcontentloaded")
-        else:
-            if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
-                logger.info("Session still valid; skipping login.")
-                page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
-                page.reload(wait_until="domcontentloaded")     
-                return
-    except PlaywrightTimeoutError:
-        if not page.locator(LOGIN_ACCOUNT).is_visible(timeout=1000):
-            logger.info("No login form visible; assuming valid session.")
+
+        except PlaywrightTimeoutError:
+            logger.info("No timeout dialog detected; session is still valid.")
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
+            page.reload(wait_until="domcontentloaded")
             return
+
+    else:
+        logger.info(f"Unexpected page after session check: {page.url}")
+        raise Exception(f"Unexpected page after session check: {page.url}")
 
     acct = page.locator(LOGIN_ACCOUNT)
     pwd  = page.locator(LOGIN_PASSWORD)
