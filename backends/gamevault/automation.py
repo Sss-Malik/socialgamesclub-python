@@ -59,7 +59,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
             page.wait_for_load_state("domcontentloaded")
             page.goto(LOGIN_PAGE_URL, wait_until="domcontentloaded")
 
-        except PlsaywrightTimeoutError:
+        except PlaywrightTimeoutError:
             logger.info("No timeout dialog detected; assuming session is still valid.")
             page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
             if "login" in page.url:
