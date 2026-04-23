@@ -49,7 +49,11 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     elif "homedetail" in current_url:
         logger.info("Landed on HomeDetail; checking for login timeout dialog.")
 
-        timeout_dialog = page.locator('div[aria-label="Login timeout"]')
+        timeout_dialog = page.locator(
+            'div[aria-label="Login timeout"]',
+            has=page.locator('button:has-text("confirm")')
+        )
+
         confirm_button = timeout_dialog.locator('button:has-text("confirm")')
 
         try:
