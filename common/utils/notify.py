@@ -28,6 +28,9 @@ def notify_webhook_async(results: dict, request_type: str):
 
 from datetime import datetime, date
 
+SERIALIZE_DENYLIST = {"api_secret_key", "api_agent_id", "password"}
+
+
 def serialize_model(obj):
     """Convert SQLAlchemy model object into a JSON-serializable dict."""
     if obj is None:
@@ -41,6 +44,8 @@ def serialize_model(obj):
     if hasattr(obj, "__table__"):
         data = {}
         for column in obj.__table__.columns:
+            if column.name in SERIALIZE_DENYLIST:
+                continue
             value = getattr(obj, column.name)
             data[column.name] = serialize_value(value)
         return data
