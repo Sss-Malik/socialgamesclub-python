@@ -33,7 +33,8 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     login_url = backend.backend_url or LOGIN_URL
 
     logger.debug(f"Using credentials -> username: {username}, login_url: {login_url}")
-    logger.debug("Navigating to login page at: %s", LOGIN_URL)
+    logger.debug("Navigating to login page at: %s", login_url)
+
     page.goto(login_url, wait_until="domcontentloaded")
     
     try:
@@ -44,23 +45,51 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     except PlaywrightTimeoutError:
         logger.info("No existing session; proceeding with login.")
 
+    max_attempts = 3
 
-    page.locator(LOGIN_ACCOUNT).fill(username)
-    page.locator(LOGIN_PASSWORD).fill(password)
-    if DEBUG:
-        input("Debug mode activated. Press Enter to continue...")
-    page.locator(LOGIN_BUTTON).click()
+    for attempt in range(1, max_attempts + 1):
+        logger.info(f"Login attempt {attempt}/{max_attempts}")
 
-    try:
-        alert = page.locator("div.alert.alert-error")
-        alert.wait_for(timeout=8000, state="visible")
-        text = alert.inner_text().strip().lower()
-        if "incorrect login or password" in text:
-            update_automation_result(task_id=task_id, status="failed", description=f"Incorrect login for {BACKEND_NAME}.")
-            logger.error("Incorrect login credentials.")
-            raise Exception(f"Incorrect credentials for backend: {backend.name}")
-    except PlaywrightTimeoutError:
-        logger.info("Login likely successful (no error dialog detected).")
+        page.locator(LOGIN_ACCOUNT).fill(username)
+        page.locator(LOGIN_PASSWORD).fill(password)
+
+        if DEBUG:
+            input("Debug mode activated. Press Enter to continue...")
+
+        page.locator(LOGIN_BUTTON).click()
+
+        try:
+            alert = page.locator("div.alert.alert-error")
+            alert.wait_for(timeout=8000, state="visible")
+            text = alert.inner_text().strip().lower()
+
+            if "incorrect login or password" in text:
+                update_automation_result(
+                    task_id=task_id,
+                    status="failed",
+                    description=f"Incorrect login for {BACKEND_NAME}."
+                )
+                logger.error("Incorrect login credentials.")
+                raise Exception(f"Incorrect credentials for backend: {backend.name}")
+
+            elif "unauthorized login attempt" in text:
+                logger.warning(f"Unauthorized login attempt detected (attempt {attempt}).")
+
+                if attempt < max_attempts:
+                    logger.info("Reloading page and retrying login...")
+                    page.reload(wait_until="domcontentloaded")
+                    continue
+                else:
+                    update_automation_result(
+                        task_id=task_id,
+                        status="failed",
+                        description=f"Unauthorized login for {BACKEND_NAME} after {max_attempts} attempts."
+                    )
+                    raise Exception(f"Unauthorized login attempts exceeded for backend: {backend.name}")
+
+        except PlaywrightTimeoutError:
+            logger.info("Login likely successful (no error dialog detected).")
+            break
 
     logger.info("Login successful, navigating to user management page.")
 

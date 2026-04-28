@@ -111,6 +111,27 @@ def insert_log(log_type, description, source_url=None, backend_id=None, account_
     finally:
         db.close()
 
+def set_game_id_if_null(username: str, new_game_id) -> bool:
+    db = SessionLocal()
+    try:
+        updated = (
+            db.query(BackendAccount)
+            .filter(
+                BackendAccount.username == username,
+                BackendAccount.deleted_at == None,
+                BackendAccount.game_id == None,
+            )
+            .update({BackendAccount.game_id: new_game_id}, synchronize_session=False)
+        )
+        db.commit()
+        return bool(updated)
+    except Exception:
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+
 def update_game_id_by_username(username: str, new_game_id: int):
     db = SessionLocal()
     try:
