@@ -20,8 +20,28 @@ from common.utils.db_actions import get_backend, insert_backend_account, insert_
     get_backend_account, mark_bonus_transferred, restore_wallet_balance, update_order_status, \
     update_wallet_detail_status, get_backend_and_account, process_recharge_operation, update_freeplay, \
     insert_log_and_update_automation_result, process_freeplay_operation, update_backend_balance
-from common.utils.browser import with_persistent_browser
+from common.utils.browser import with_persistent_browser, STEALTH_UA
+from common.utils.anticaptcha_solver import solve_recaptcha_v3
 from settings import APP_ENV, HEADLESS, DEBUG
+
+
+# JS that injects the reCAPTCHA v3 token and submits the login form.
+# Cloning the form detaches grecaptcha's submit listener, which would
+# otherwise call grecaptcha.execute() and overwrite our injected token
+# with a fresh (lower-scoring) one.
+_RIVER_RECAPTCHA_INJECT_JS = """
+(token) => {
+  const responseEl = document.getElementById('g-recaptcha-response');
+  if (responseEl) responseEl.value = token;
+  const form = document.getElementById('login-form');
+  if (!form) throw new Error('login-form not found');
+  const clone = form.cloneNode(true);
+  form.parentNode.replaceChild(clone, form);
+  const cloneResp = clone.querySelector('#g-recaptcha-response');
+  if (cloneResp) cloneResp.value = token;
+  clone.submit();
+}
+"""
 
 
 def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
@@ -38,7 +58,7 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
     page.goto(login_url, wait_until="domcontentloaded")
     
     try:
-        page.locator(CREATE_ACCOUNT_INIT).wait_for(timeout=1000)
+        page.locator("a.dropdown-toggle:has-text('You logged in as')").wait_for(timeout=1000)
         logger.info("Existing session detected; skipping login.")
         page.goto(USER_MANAGEMENT_URL, wait_until="domcontentloaded")
         return
@@ -56,7 +76,30 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         if DEBUG:
             input("Debug mode activated. Press Enter to continue...")
 
-        page.locator(LOGIN_BUTTON).click()
+        logger.info("Solving reCAPTCHA Enterprise v3 token via anticaptcha...")
+        token = solve_recaptcha_v3(
+            website_url=login_url,
+            website_key=RECAPTCHA_SITE_KEY,
+            page_action=RECAPTCHA_PAGE_ACTION,
+            min_score=RECAPTCHA_MIN_SCORE,
+            is_enterprise=True,
+            user_agent=STEALTH_UA,
+            logger=logger,
+        )
+        if not token:
+            if attempt < max_attempts:
+                logger.warning("reCAPTCHA solve failed; retrying login.")
+                page.reload(wait_until="domcontentloaded")
+                continue
+            update_automation_result(
+                task_id=task_id,
+                status="failed",
+                description=f"reCAPTCHA v3 solve failed for {BACKEND_NAME} after {max_attempts} attempts.",
+            )
+            raise Exception(f"reCAPTCHA v3 solve failed for backend: {backend.name}")
+
+        logger.info("reCAPTCHA token acquired; injecting and submitting form.")
+        page.evaluate(_RIVER_RECAPTCHA_INJECT_JS, token)
 
         try:
             alert = page.locator("div.alert.alert-error")

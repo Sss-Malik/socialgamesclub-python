@@ -13,6 +13,12 @@ PASSWORD  = "TestRS1122"
 CAPTCHA = False
 USER_MANAGEMENT_URL = "https://river-pay.com/cashier/create"
 
+# reCAPTCHA Enterprise v3 (silent score-based). Token must be solved per
+# login attempt and injected into the hidden #g-recaptcha-response field.
+RECAPTCHA_SITE_KEY = "6LcflrYsAAAAAF9-keXC5cGBwk9KNzGNTZ_LzCFW"
+RECAPTCHA_PAGE_ACTION = "LOGIN"
+RECAPTCHA_MIN_SCORE = 0.7
+
 # — Paths for this backend (relative to the project root) —
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"

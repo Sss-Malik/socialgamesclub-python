@@ -18,7 +18,9 @@ _DEFAULT_UA = (
     "Chrome/115.0.0.0 Safari/537.36"
 )
 # Sourced from pw-stealth-enhanced DEFAULT_USER_AGENT_POOL[0].
-_STEALTH_UA = (
+# Public so backend automations can pass a matching UA to anticaptcha
+# for reCAPTCHA v3 fingerprint consistency.
+STEALTH_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/131.0.0.0 Safari/537.36"
@@ -34,7 +36,7 @@ def get_or_create_context(backend: str):
 
         # Only one thread can reach here per backend
         context = BROWSER.new_context(
-            user_agent=_STEALTH_UA if is_stealth else _DEFAULT_UA,
+            user_agent=STEALTH_UA if is_stealth else _DEFAULT_UA,
             viewport={"width": 1280, "height": 720},
             locale="en-US",
             color_scheme="light",
