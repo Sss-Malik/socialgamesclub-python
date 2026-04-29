@@ -1,10 +1,28 @@
 import functools
 from playwright.sync_api import Page
 from common.utils.playwright_pool import BROWSER, PAGE_SEM  # see below
+from common.utils.stealth import apply_stealth_sync
 import threading
 
 _persistent_contexts: dict[str, any] = {}
 _contexts_lock = threading.Lock()
+
+# Backends that need full anti-fingerprint stealth (Cloudflare/bot detection).
+# Keep this set as small as possible — every other backend uses the legacy
+# context profile that has been stable in production.
+STEALTH_BACKENDS = {"river"}
+
+_DEFAULT_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/115.0.0.0 Safari/537.36"
+)
+# Sourced from pw-stealth-enhanced DEFAULT_USER_AGENT_POOL[0].
+_STEALTH_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 
 
 def get_or_create_context(backend: str):
@@ -12,21 +30,22 @@ def get_or_create_context(backend: str):
         if backend in _persistent_contexts:
             return _persistent_contexts[backend]
 
+        is_stealth = backend in STEALTH_BACKENDS
+
         # Only one thread can reach here per backend
         context = BROWSER.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/115.0.0.0 Safari/537.36"
-            ),
+            user_agent=_STEALTH_UA if is_stealth else _DEFAULT_UA,
             viewport={"width": 1280, "height": 720},
             locale="en-US",
             color_scheme="light",
         )
-        print(f"[INFO] Created new context for backend={backend}")
-        context.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
+        print(f"[INFO] Created new context for backend={backend} (stealth={is_stealth})")
+        if is_stealth:
+            apply_stealth_sync(context, locale="en-US", timezone_id="America/New_York")
+        else:
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
         _persistent_contexts[backend] = context
         return context
 
