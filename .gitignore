@@ -14,3 +14,5 @@ __pycache__/
 *.db
 celerybeat-schedule.db
 celerybeat-schedule
+/.playwright-mcp
+/.claude
