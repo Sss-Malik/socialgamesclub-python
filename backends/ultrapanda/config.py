@@ -2,7 +2,7 @@ from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
 BACKEND_NAME = "ultrapanda"
-BACKEND_ID = 9
+BACKEND_ID = 8
 DEBUG = True
 BACKEND_SIGNATURE = "UP"
 
