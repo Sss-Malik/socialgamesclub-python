@@ -347,22 +347,24 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
 
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
     try:
-        # 1. Define the dialog by Role + Name AND filter by the specific text content
-        # This resolves the strict mode violation by ignoring the other "Hint" dialog.
-        dialog = page.get_by_role("dialog", name="Hint").filter(
+        dialog = page.locator(
+            '.el-dialog[role="dialog"][aria-label="Hint"]',
             has_text="To ensure the security of your account"
-        )
+        ).last
 
-        # 2. Wait for this specific dialog to be visible
         dialog.wait_for(state="visible", timeout=3000)
 
-        # 3. Click the Confirm button inside this specific dialog
-        dialog.get_by_role("button", name="confirm").click()
+        # Optional: choose the longer suppression option
+        dialog.locator("label.el-radio", has_text="Do Not Remind This Month").click()
+
+        dialog.locator("button.el-button--primary", has_text=re.compile(r"^confirm$", re.I)).click()
+
+        # Critical: wait for the blocking overlay to go away
+        page.locator(".v-modal").wait_for(state="hidden", timeout=5000)
 
         logger.info("google authenticator bind dialog detected and closed")
 
     except PlaywrightTimeoutError:
-        # Dialog did not appear — safe to continue
         logger.info("google authenticator bind dialog not present, continuing.")
     logger.debug("Opening create account dialog.")
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
