@@ -367,6 +367,8 @@ def _create_single_account(page: Page, logger: logging.Logger, task_id):
 
     except PlaywrightTimeoutError:
         logger.info("google authenticator bind dialog not present, continuing.")
+        page.reload(wait_until="domcontentloaded")
+        logger.debug("page reloaded")
     logger.debug("Opening create account dialog.")
     page.locator(CREATE_ACCOUNT_INIT).click(timeout=15_000)
 
