@@ -16,3 +16,5 @@ celerybeat-schedule.db
 celerybeat-schedule
 /.playwright-mcp
 /.claude
+/.mcp.json
+/node_modules
