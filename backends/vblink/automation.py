@@ -346,13 +346,14 @@ def _login_and_navigate(page: Page, logger: logging.Logger, backend, task_id):
         return session
 
 def _create_single_account(page: Page, logger: logging.Logger, task_id):
+    page.wait_for_timeout(3000)
     try:
         dialog = page.locator(
             '.el-dialog[role="dialog"][aria-label="Hint"]',
             has_text="To ensure the security of your account"
         ).last
 
-        dialog.wait_for(state="visible", timeout=3000)
+        dialog.wait_for(state="visible", timeout=10000)
 
         # Optional: choose the longer suppression option
         dialog.locator("label.el-radio", has_text="Do Not Remind This Month").click()
