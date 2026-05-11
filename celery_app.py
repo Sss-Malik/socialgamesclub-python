@@ -37,6 +37,7 @@ celery_app.conf.timezone = "Asia/Karachi"
 celery_app.conf.task_queues = (
     Queue("default",    Exchange("default"),    routing_key="default"),
     Queue("juwa",       Exchange("juwa"),       routing_key="juwa"),
+    Queue("juwa2",       Exchange("juwa2"),       routing_key="juwa2"),
     Queue("milkyway",   Exchange("milkyway"),   routing_key="milkyway"),
     Queue("gameroom",   Exchange("gameroom"),   routing_key="gameroom"),
     Queue("orionstars", Exchange("orionstars"), routing_key="orionstars"),
@@ -59,6 +60,7 @@ celery_app.conf.task_routes = {
 
     # per-backend automation actions
     "backends.juwa.automation.action_*":       {"queue": "juwa"},
+    "backends.juwa2.automation.action_*":       {"queue": "juwa2"},
     "backends.milkyway.automation.action_*":   {"queue": "milkyway"},
     "backends.gameroom.automation.action_*":   {"queue": "gameroom"},
     "backends.orionstars.automation.action_*": {"queue": "orionstars"},
