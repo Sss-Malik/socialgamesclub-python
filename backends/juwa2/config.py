@@ -1,20 +1,20 @@
 from pathlib import Path
 
 # — Backend identification (used for logging, data paths, etc.) —
-BACKEND_NAME = "juwa"
-BACKEND_ID = 4
+BACKEND_NAME = "juwa2"
+BACKEND_ID = 10
 DEBUG = True
-BACKEND_SIGNATURE = "JW"
+BACKEND_SIGNATURE = "JW2"
 
 # — Login credentials (hard-coded for this backend) —
-LOGIN_URL = "https://ht.juwa777.com/HomeDetail"
+LOGIN_URL = "https://agent.juwa2.com"
 USERNAME  = "TestJW159"
 PASSWORD  = "Test1234"
 
 CAPTCHA = True
 URL_CHANGE = True
 
-USER_MANAGEMENT_URL = "https://ht.juwa777.com/userManagement"
+USER_MANAGEMENT_URL = "https://agent.juwa2.com/userManagement"
 MAX_CAPTCHA_RETRIES = 5
 
 # — Paths for this backend (relative to the project root) —
