@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from decimal import Decimal
 
@@ -32,3 +32,10 @@ class RechargeFreeplayRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     backend: str = Field(..., example="juwa")
     account_id: str = Field(..., example="abc123")
+
+class ECashAppForwardRequest(BaseModel):
+    # Transparent forwarder to the ECashApp gateway. Laravel signs the
+    # payload; this server adds the network hop from a whitelisted AWS IP.
+    path: str = Field(..., example="/api/pay/create")
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    method: Optional[str] = Field("POST", example="POST")

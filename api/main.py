@@ -3,8 +3,11 @@
 from __future__ import annotations
 from uuid import uuid4
 import asyncio
+import logging
+import time
 from typing import Optional, Literal, Dict, Any
 from datetime import datetime
+import requests
 from fastapi import FastAPI, HTTPException, status, Header, Request, Depends
 
 from models import User
@@ -14,8 +17,15 @@ from .schemas import (
     WithdrawAccountRequest,
     ReadAccountRequest,
     RechargeFreeplayRequest, ResetPasswordRequest,
+    ECashAppForwardRequest,
 )
-from settings import APP_KEY, API_DELAY_SECONDS
+from settings import (
+    APP_KEY,
+    API_DELAY_SECONDS,
+    ECASHAPP_BASE_URL,
+    ECASHAPP_FORWARD_TIMEOUT,
+    ECASHAPP_ALLOWED_PATHS,
+)
 from .tasks import invoke_action
 from common.utils.db_actions import (
     get_order,
@@ -388,3 +398,56 @@ async def reset_password(
         payload=req.dict(),
         user_id=backend_account.user.id,
     )
+
+
+# ---- ECashApp gateway forwarder ----
+
+@app.post("/ecashapp/forward")
+def ecashapp_forward(
+    req: ECashAppForwardRequest,
+    _: bool = Depends(require_app_key),
+):
+    """
+    Transparent passthrough to the ECashApp merchant gateway.
+
+    Laravel (on Hostinger, IP not whitelisted) signs the payload and POSTs
+    here; this server (on AWS, IP whitelisted at the merchant administrator
+    account) forwards the request to the gateway and returns the response
+    verbatim. Laravel verifies the response signature, so the payload must
+    not be transformed in either direction.
+    """
+    logger = logging.getLogger("casino_automation.ecashapp")
+
+    if req.path not in ECASHAPP_ALLOWED_PATHS:
+        logger.warning("ecashapp forward: rejected path %s", req.path)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="path not allowed",
+        )
+
+    url = ECASHAPP_BASE_URL.rstrip("/") + req.path
+    method = (req.method or "POST").upper()
+    started = time.time()
+
+    try:
+        if method == "GET":
+            resp = requests.get(url, timeout=ECASHAPP_FORWARD_TIMEOUT)
+        else:
+            resp = requests.post(url, json=req.payload, timeout=ECASHAPP_FORWARD_TIMEOUT)
+    except requests.RequestException as e:
+        logger.error("ecashapp forward: gateway error %s: %s", req.path, e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"gateway unreachable: {e}",
+        )
+
+    body = resp.json() if resp.content else {}
+    duration_ms = int((time.time() - started) * 1000)
+    logger.info(
+        "ecashapp forward path=%s status=%s code=%s duration_ms=%s",
+        req.path,
+        resp.status_code,
+        body.get("code") if isinstance(body, dict) else None,
+        duration_ms,
+    )
+    return body

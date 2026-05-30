@@ -55,3 +55,17 @@ WORDS_FOR_PASSWORD = [
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+# ECashApp merchant gateway forwarder (this server's whitelisted IP makes
+# the outbound call so Laravel on Hostinger doesn't have to).
+ECASHAPP_BASE_URL = os.getenv("ECASHAPP_BASE_URL", "https://www.ggusonepay.com")
+ECASHAPP_FORWARD_TIMEOUT = int(os.getenv("ECASHAPP_FORWARD_TIMEOUT", "15"))
+ECASHAPP_ALLOWED_PATHS = {
+    "/api/pay/create",
+    "/api/pay/query",
+    "/api/pay/close",
+    "/api/transfer/create",
+    "/api/transfer/query",
+    "/api/balance/query",
+    "/api/health",
+}
