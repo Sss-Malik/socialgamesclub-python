@@ -28,7 +28,7 @@ services:
         --beat
         --loglevel=debug
         --concurrency=100
-        -Q default,juwa,juwa2,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway
+        -Q default,juwa,juwa2,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway,goldentreasure
         --hostname=worker.main@%h
     volumes:
       - .:/app

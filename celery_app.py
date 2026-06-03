@@ -47,6 +47,7 @@ celery_app.conf.task_queues = (
     Queue("vblink",     Exchange("vblink"),     routing_key="vblink"),
     Queue("river",      Exchange("river"),      routing_key="river"),
     Queue("firekirin",  Exchange("firekirin"),  routing_key="firekirin"),
+    Queue("goldentreasure", Exchange("goldentreasure"), routing_key="goldentreasure"),
 )
 
 # -------------------------------------------------------------------
@@ -70,6 +71,7 @@ celery_app.conf.task_routes = {
     "backends.vblink.automation.action_*":     {"queue": "vblink"},
     "backends.river.automation.action_*":      {"queue": "river"},
     "backends.firekirin.automation.action_*":  {"queue": "firekirin"},
+    "backends.goldentreasure.automation.action_*": {"queue": "goldentreasure"},
 }
 
 # -------------------------------------------------------------------
