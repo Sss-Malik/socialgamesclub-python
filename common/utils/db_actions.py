@@ -11,7 +11,7 @@ from models import BackendGame, BackendAccount, Log, Deposit, AutomationResult, 
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -21,6 +21,43 @@ def get_backend(name):
         return db.query(BackendGame).filter(BackendGame.name == name,   BackendGame.deleted_at == None).first()
     finally:
         db.close()
+
+def get_backends_below_unassigned_threshold(threshold: int = 10):
+    """
+    Return [(backend_id, backend_name), ...] for every non-deleted backend_game
+    whose number of *unassigned* accounts (user_id IS NULL AND is_assigned = False
+    AND not soft-deleted) is strictly less than `threshold`.
+
+    The unassigned predicate lives in the LEFT OUTER JOIN condition (not WHERE) so
+    that backends with zero accounts still appear with a count of 0.
+    """
+    db = SessionLocal()
+    try:
+        unassigned_count = func.count(BackendAccount.id)
+        rows = (
+            db.query(
+                BackendGame.id,
+                BackendGame.name,
+                unassigned_count.label("unassigned"),
+            )
+            .outerjoin(
+                BackendAccount,
+                and_(
+                    BackendAccount.backend_id == BackendGame.id,
+                    BackendAccount.user_id.is_(None),
+                    BackendAccount.is_assigned == False,  # noqa: E712
+                    BackendAccount.deleted_at.is_(None),
+                ),
+            )
+            .filter(BackendGame.deleted_at.is_(None))
+            .group_by(BackendGame.id, BackendGame.name)
+            .having(unassigned_count < threshold)
+            .all()
+        )
+        return [(row.id, row.name) for row in rows]
+    finally:
+        db.close()
+
 
 def insert_backend_account(username, password, backend_id, game_id=None, user_id=None, is_assigned=False):
     db = SessionLocal()

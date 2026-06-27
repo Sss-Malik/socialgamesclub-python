@@ -106,6 +106,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=0, minute=0),
         "options": {"queue": "default"},
     },
+    "replenish-backend-accounts": {
+        "task": "replenish.replenish_backend_accounts",
+        "schedule": crontab(minute="*/10"),
+        "options": {"queue": "default"},
+    },
 }
 
 # -------------------------------------------------------------------
