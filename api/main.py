@@ -163,7 +163,7 @@ def _enqueue_action(
 # ---- Routes ----
 
 @app.post("/automation/create-account")
-async def create_account(
+def create_account(
     req: CreateAccountRequest,
     _: bool = Depends(require_app_key),
 ):
@@ -178,7 +178,7 @@ async def create_account(
     )
 
 @app.post("/automation/read-backend")
-async def backend_balance(
+def backend_balance(
     req: CreateAccountRequest,
     _: bool = Depends(require_app_key),
 ):
@@ -192,7 +192,7 @@ async def backend_balance(
         user_id=None,
     )
 @app.post("/automation/create-account-user")
-async def create_account_user(
+def create_account_user(
     req: CreateAccountRequest,
     current_user: User = Depends(require_user_token),
 ):
@@ -208,7 +208,7 @@ async def create_account_user(
 
 
 @app.post("/automation/recharge-account")
-async def recharge_account(
+def recharge_account(
     req: RechargeAccountRequest,
     x_order_id: Optional[str] = Header(None),
     current_user: User = Depends(require_user_token),
@@ -247,7 +247,7 @@ async def recharge_account(
 
 
 @app.post("/automation/withdraw-account")
-async def withdraw_account(
+def withdraw_account(
     req: WithdrawAccountRequest,
     x_order_id: Optional[str] = Header(None),
     _: bool = Depends(require_app_key)
@@ -271,7 +271,7 @@ async def withdraw_account(
 
 
 @app.post("/automation/read-account")
-async def read_account(
+def read_account(
     req: ReadAccountRequest,
     _: bool = Depends(require_app_key)
 ):
@@ -286,7 +286,7 @@ async def read_account(
     )
 
 @app.post("/automation/read-account-user")
-async def read_account(
+def read_account(
     req: ReadAccountRequest,
     current_user: User = Depends(require_user_token)
 ):
@@ -310,7 +310,7 @@ async def read_account(
 
 
 @app.post("/automation/freeplay")
-async def recharge_freeplay(
+def recharge_freeplay(
     req: RechargeFreeplayRequest,
     current_user: User = Depends(require_user_token)
 ):
@@ -375,7 +375,7 @@ async def recharge_freeplay(
     )
 
 @app.post("/automation/reset-password")
-async def reset_password(
+def reset_password(
     req: ResetPasswordRequest,
     current_user: User = Depends(require_user_token)
 ):

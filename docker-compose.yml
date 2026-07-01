@@ -2,7 +2,11 @@ services:
   web:
     build: .
     container_name: casino_web
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    # Multiple worker processes: one wedged event loop no longer black-holes
+    # all HTTP traffic. Handlers are sync (def), so blocking DB/enqueue work
+    # runs in each worker's threadpool instead of on its event loop.
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
     volumes:
       - .:/app
     ports:
@@ -13,16 +17,24 @@ services:
       - PYTHONPATH=/app
     depends_on:
       - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
     container_name: casino_redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
 
   worker:
     build: .
     container_name: casino_worker
+    restart: unless-stopped
     command: >
       celery -A celery_app.celery_app worker
         --beat

@@ -9,6 +9,7 @@ if project_root not in sys.path:
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 from kombu import Queue, Exchange
 
 # settings.py should export CELERY_BROKER_URL and CELERY_RESULT_BACKEND
@@ -114,6 +115,18 @@ celery_app.conf.beat_schedule = {
 }
 
 # -------------------------------------------------------------------
-# 7) Auto-discover any other tasks in api.tasks
+# 7) Fork safety: the SQLAlchemy engine is created in the parent (at import
+#    of db.py) and inherited by every prefork child. Sharing TCP connections
+#    across fork corrupts them ("MySQL server has gone away"), so each child
+#    disposes the inherited pool and lazily opens its own connections.
+# -------------------------------------------------------------------
+@worker_process_init.connect
+def _dispose_inherited_db_pool(**_kwargs):
+    from db import engine
+    engine.dispose()
+
+
+# -------------------------------------------------------------------
+# 8) Auto-discover any other tasks in api.tasks
 # -------------------------------------------------------------------
 celery_app.autodiscover_tasks(["api.tasks"])
