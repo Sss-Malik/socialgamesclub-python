@@ -37,7 +37,7 @@ MAIL_FROM_ADDRESS = os.getenv("MAIL_FROM_ADDRESS")
 MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME")
 
 ACTIVATE_EMAILS = os.getenv("ACTIVATE_EMAILS", "True").lower() == "true"
-MAIL_RECIPIENT = ["msaud946@gmail.com", "ahsanformanite97@gmail.com"]
+MAIL_RECIPIENT = ["msaud946@gmail.com", "ahsanformanite97@gmail.com", "kraza942@gmail.com"]
 
 import os
 # Base path for your project root (so we can find backends/)
