@@ -1,8 +1,17 @@
+# Docker's json-file driver is unbounded by default. On a 30GB root volume that
+# is a disk-full outage waiting to happen, so every service caps its own logs.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   web:
     build: .
     container_name: casino_web
     restart: unless-stopped
+    logging: *default-logging
     # Multiple worker processes: one wedged event loop no longer black-holes
     # all HTTP traffic. Handlers are sync (def), so blocking DB/enqueue work
     # runs in each worker's threadpool instead of on its event loop.
@@ -28,18 +37,28 @@ services:
     image: redis:7-alpine
     container_name: casino_redis
     restart: unless-stopped
+    logging: *default-logging
+    # Bound to loopback: the broker must not be reachable from the internet.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   worker:
     build: .
     container_name: casino_worker
     restart: unless-stopped
+    logging: *default-logging
+    # --concurrency is a PREFORK PROCESS COUNT, and every child that runs a
+    # Playwright backend launches its own Chromium at import (see
+    # common/utils/playwright_pool.py) which then lives for the life of the
+    # process. So this number is the ceiling on concurrent browsers, and RAM
+    # scales linearly with it. It was 100 only because a --pool=gevent-era
+    # value (600 greenlets sharing one browser) outlived the removal of the
+    # pool arg; the last value actually chosen for prefork was 8.
     command: >
       celery -A celery_app.celery_app worker
         --beat
-        --loglevel=debug
-        --concurrency=100
+        --loglevel=info
+        --concurrency=6
         -Q default,juwa,juwa2,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway,goldentreasure
         --hostname=worker.main@%h
     volumes:
