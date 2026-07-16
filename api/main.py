@@ -38,7 +38,9 @@ from common.utils.db_actions import (
     insert_automation_request,
     get_pat, get_pat_user, get_validated_backend_account, deduct_wallet_balance, insert_automation_result_and_request,
     check_coupon_validity_and_return_amount,
-    get_latest_manual_freeplay
+    get_latest_manual_freeplay,
+    restore_wallet_balance,
+    InsufficientBalance,
 )
 
 # ---- App setup ----
@@ -232,18 +234,47 @@ def recharge_account(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
-    deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.amount_to_deduct)
+    try:
+        deduct_wallet_balance(wallet_id=current_user.wallet_id, deduct_amount=req.amount_to_deduct)
+    except InsufficientBalance:
+        # The check above read the balance in an earlier session; the locked
+        # re-read disagreed, so a concurrent recharge got there first.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Insufficient wallet balance")
+
     coupon_bonus_amount = check_coupon_validity_and_return_amount(req.coupon_code) # add coupon bonus to count
-    return _enqueue_action(
-        backend_key=req.backend,
-        action="recharge-account",
-        description="Initiate account recharge",
-        queue_kwargs={"account_id": req.account_id, "count": req.count + coupon_bonus_amount, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct, "coupon_code": req.coupon_code},
-        request_type="recharge",
-        payload=req.dict(),
-        user_id=current_user.id,
-        order_id=x_order_id,
-    )
+
+    # The user is billed and the coupon spent. Anything that fails from here has
+    # to hand both back, or they have paid for a task that will never run.
+    try:
+        return _enqueue_action(
+            backend_key=req.backend,
+            action="recharge-account",
+            description="Initiate account recharge",
+            queue_kwargs={"account_id": req.account_id, "count": req.count + coupon_bonus_amount, "order_id": x_order_id, "wallet_id": current_user.wallet_id, "amount_to_deduct": req.amount_to_deduct, "coupon_code": req.coupon_code},
+            request_type="recharge",
+            payload=req.dict(),
+            user_id=current_user.id,
+            order_id=x_order_id,
+        )
+    except Exception:
+        logging.getLogger("casino_automation.recharge").exception(
+            "recharge enqueue failed for order %s; refunding wallet %s",
+            x_order_id,
+            current_user.wallet_id,
+        )
+        restore_wallet_balance(
+            wallet_id=current_user.wallet_id,
+            restore_amount=req.amount_to_deduct,
+            order_id=x_order_id,
+            # Only give back a coupon we actually consumed. An expired or
+            # already-used code yields no bonus and was never marked used;
+            # "restoring" it would set a spent coupon back to pending.
+            coupon_code=req.coupon_code if coupon_bonus_amount else None,
+        )
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not schedule recharge; wallet refunded",
+        )
 
 
 @app.post("/automation/withdraw-account")

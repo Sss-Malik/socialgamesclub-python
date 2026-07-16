@@ -15,6 +15,22 @@ from sqlalchemy import or_, and_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.exc import SQLAlchemyError
 
+
+logger = logging.getLogger(__name__)
+
+
+class WalletError(Exception):
+    """Base class for wallet debit failures."""
+
+
+class WalletNotFound(WalletError):
+    """The wallet being debited does not exist."""
+
+
+class InsufficientBalance(WalletError):
+    """The wallet cannot cover the requested debit."""
+
+
 def get_backend(name):
     db = SessionLocal()
     try:
@@ -602,15 +618,31 @@ def get_validated_backend_account(account_id, user_id):
 
 
 def deduct_wallet_balance(wallet_id, deduct_amount):
+    """
+    Debit a wallet, or raise.
+
+    Callers bill first and enqueue the recharge second, so this must never fail
+    quietly: a swallowed error here charges nobody while the recharge still runs.
+    The row is locked and the balance re-checked because the caller's own check
+    ran in an earlier session and may be stale by the time we get here.
+    """
     db = SessionLocal()
     try:
-        wallet = db.query(WalletMaster).filter_by(id=wallet_id).first()
-        if wallet:
-            wallet.balance_minor = wallet.balance_minor - deduct_amount
-            db.commit()
-
-    except Exception as e:
+        wallet = (
+            db.query(WalletMaster).filter_by(id=wallet_id).with_for_update().first()
+        )
+        if wallet is None:
+            raise WalletNotFound(f"wallet {wallet_id} does not exist")
+        if wallet.balance_minor < deduct_amount:
+            raise InsufficientBalance(
+                f"wallet {wallet_id} holds {wallet.balance_minor}, "
+                f"cannot cover {deduct_amount}"
+            )
+        wallet.balance_minor = wallet.balance_minor - deduct_amount
+        db.commit()
+    except Exception:
         db.rollback()
+        raise
     finally:
         db.close()
 
@@ -670,7 +702,18 @@ def restore_wallet_balance(wallet_id, restore_amount, order_id, coupon_code = No
                 coupon.status = "pending"
 
         db.commit()
-    except Exception as e:
+    except Exception:
+        # Deliberately does not re-raise: every caller is a failure path that is
+        # already handling an error. But the money is real, so a refund that did
+        # not land must never vanish without a trace.
+        logger.exception(
+            "wallet refund FAILED: wallet=%s amount=%s order=%s coupon=%s "
+            "(customer is still debited)",
+            wallet_id,
+            restore_amount,
+            order_id,
+            coupon_code,
+        )
         db.rollback()
     finally:
         db.close()
