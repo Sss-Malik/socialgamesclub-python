@@ -454,7 +454,7 @@ def action_read_account(account_id: str, task_id, backend, **_):
 
 def action_recharge_account(
     count: int, account_id: str, order_id, task_id, backend,
-    wallet_id, amount_to_deduct, coupon_code=None, leaderboard_reward_id=None, **_,
+    wallet_id, amount_to_deduct, coupon_code=None, **_,
 ):
     backend_game, backend_account = get_backend_and_account(backend, account_id)
     ensure_directories(DATA_DIR, CAPTCHA_DIR, LOGS_DIR)
@@ -502,7 +502,6 @@ def action_recharge_account(
                 wallet_id=wallet_id,
                 bonus_transferred=False,
                 restore_coupon=True,
-                restore_leaderboard_reward=True, leaderboard_reward_id=leaderboard_reward_id,
                 coupon_code=coupon_code,
             )
             return
@@ -572,13 +571,12 @@ def action_recharge_account(
             wallet_id=wallet_id,
             bonus_transferred=False,
             restore_coupon=True,
-            restore_leaderboard_reward=True, leaderboard_reward_id=leaderboard_reward_id,
             coupon_code=coupon_code,
         )
         logger.info("Wallet balance restored")
 
     except Exception as e:
-        restore_wallet_balance(wallet_id, amount_to_deduct, order_id, coupon_code, leaderboard_reward_id)
+        restore_wallet_balance(wallet_id, amount_to_deduct, order_id, coupon_code)
         insert_log(
             "info", "Critical error during account recharge - Wallet balance restored",
             source_url=None, backend_id=backend_game.id,
