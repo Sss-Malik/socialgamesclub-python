@@ -59,7 +59,7 @@ services:
         --beat
         --loglevel=info
         --concurrency=6
-        -Q default,juwa,juwa2,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway,goldentreasure
+        -Q default,juwa,juwa2,orionstars,gameroom,gamevault,firekirin,ultrapanda,pandamaster,vblink,river,milkyway,goldentreasure,yolo,cashfrenzy,cashmachine
         --hostname=worker.main@%h
     volumes:
       - .:/app

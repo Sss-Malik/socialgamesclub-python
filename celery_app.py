@@ -49,6 +49,9 @@ celery_app.conf.task_queues = (
     Queue("river",      Exchange("river"),      routing_key="river"),
     Queue("firekirin",  Exchange("firekirin"),  routing_key="firekirin"),
     Queue("goldentreasure", Exchange("goldentreasure"), routing_key="goldentreasure"),
+    Queue("yolo",       Exchange("yolo"),       routing_key="yolo"),
+    Queue("cashfrenzy", Exchange("cashfrenzy"), routing_key="cashfrenzy"),
+    Queue("cashmachine",Exchange("cashmachine"),routing_key="cashmachine"),
 )
 
 # -------------------------------------------------------------------
@@ -73,6 +76,9 @@ celery_app.conf.task_routes = {
     "backends.river.automation.action_*":      {"queue": "river"},
     "backends.firekirin.automation.action_*":  {"queue": "firekirin"},
     "backends.goldentreasure.automation.action_*": {"queue": "goldentreasure"},
+    "backends.yolo.automation.action_*":        {"queue": "yolo"},
+    "backends.cashfrenzy.automation.action_*":  {"queue": "cashfrenzy"},
+    "backends.cashmachine.automation.action_*": {"queue": "cashmachine"},
 }
 
 # -------------------------------------------------------------------
