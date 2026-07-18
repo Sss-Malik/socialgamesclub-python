@@ -30,6 +30,16 @@ import os
 
 import pytest
 
+try:
+    from playwright.sync_api import Error as PlaywrightError
+except ImportError:
+    # playwright itself is not installed on this machine, so its Error type
+    # can't be imported either. Use a dummy class that nothing ever raises;
+    # the module-not-found case is instead handled by the ImportError branch
+    # below (matched by module name), so this sentinel never needs to fire.
+    class PlaywrightError(Exception):
+        pass
+
 _BACKENDS_ROOT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backends"
 )
@@ -82,17 +92,47 @@ def test_action_recharge_account_binds_dispatch_payload(module_path):
     strands the wallet deduction with no restore path."""
     try:
         module = importlib.import_module(module_path)
-    except Exception as e:
+    except PlaywrightError as e:
         # A visible skip, never a silent pass: the Playwright backends launch
-        # Chromium at import via common/utils/playwright_pool.py and will skip
-        # on a machine without browsers installed.
-        pytest.skip(f"{module_path}: cannot import ({type(e).__name__}: {e})")
+        # Chromium at import via common/utils/playwright_pool.py, and this is
+        # the error Playwright itself raises when the browser binary isn't
+        # installed on this machine. Only this narrow case skips -- anything
+        # else below is a real defect and must fail loudly.
+        pytest.skip(
+            f"{module_path}: Chromium not installed on this machine "
+            f"({type(e).__name__}: {e})"
+        )
+    except ImportError as e:
+        missing = getattr(e, "name", "") or ""
+        if missing == "playwright" or missing.startswith("playwright."):
+            # Same skip category as above: the playwright package itself
+            # isn't installed on this machine, so the module never got as
+            # far as launching a browser.
+            pytest.skip(
+                f"{module_path}: playwright package not installed "
+                f"({type(e).__name__}: {e})"
+            )
+        pytest.fail(
+            f"{module_path}: failed to import ({type(e).__name__}: {e}) -- "
+            f"this is a real defect (not a missing browser) that would "
+            f"break every production dispatch to this backend"
+        )
+    except Exception as e:
+        pytest.fail(
+            f"{module_path}: failed to import ({type(e).__name__}: {e}) -- "
+            f"this is a real defect (not a missing browser) that would "
+            f"break every production dispatch to this backend"
+        )
 
     fn = getattr(module, "action_recharge_account", None)
     if fn is None:
         pytest.fail(f"{module_path}: has no action_recharge_account")
 
     try:
+        # bind_partial (not bind): tolerates the missing `page` param below,
+        # but for the same reason it also silently tolerates any OTHER
+        # missing param a backend might start requiring -- this test cannot
+        # catch that; only extra/renamed keys the signature rejects.
         inspect.signature(fn).bind_partial(**DISPATCH_PAYLOAD)
     except TypeError as e:
         pytest.fail(
