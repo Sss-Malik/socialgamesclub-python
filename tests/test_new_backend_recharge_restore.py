@@ -80,9 +80,12 @@ def test_recharge_failure_refunds_wallet(backend_name, monkeypatch):
     calls = []
     _install_stubs(monkeypatch, module, calls)
 
+    # count and amount_to_deduct are deliberately distinct: if a regression
+    # swapped them (refunding the recharge count instead of the amount
+    # debited), this assertion must catch it.
     # Must not raise: the except block owns the refund.
     module.action_recharge_account(
-        count=50,
+        count=999,
         account_id="userXX1",
         order_id="ORD-1",
         task_id="task-1",
@@ -97,6 +100,8 @@ def test_recharge_failure_refunds_wallet(backend_name, monkeypatch):
         f"got {len(calls)}"
     )
     args, kwargs = calls[0]
+    # The refund must equal amount_to_deduct (the amount actually debited),
+    # never count (999) -- restore_wallet_balance(wallet_id, amount, order_id, coupon_code).
     assert args == (1, 50, "ORD-1", None)
     assert kwargs == {}
 

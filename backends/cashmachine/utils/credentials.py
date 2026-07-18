@@ -20,7 +20,7 @@ def generate_credentials(use_special_char=False):
     if remaining_length <= 0:
         raise ValueError("BACKEND_SIGNATURE is too long to fit in account_id")
 
-    random_length = random.randint(0, remaining_length)
+    random_length = random.randint(1, remaining_length)
 
     def generate_account_id():
         while True:
