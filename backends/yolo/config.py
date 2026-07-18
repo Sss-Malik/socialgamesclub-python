@@ -9,9 +9,12 @@ BACKEND_SIGNATURE = "YL"
 # — Direct HTTP API base URL (Laravel 7 + Dcat Admin; no trailing slash) —
 API_BASE_URL = "https://agent.yolo-777.com"
 
-# — Login credentials (fallback when backend_games columns are unset) —
-USERNAME = "webyolo1"
-PASSWORD = "Web@@1122"
+# — Login credentials —
+# Real credentials live in the Laravel-managed `backend_games` row and reach
+# the client via build_client_from_backend(), which prefers backend.username /
+# backend.password. These are empty fallbacks — never commit live credentials.
+USERNAME = ""
+PASSWORD = ""
 
 # Default RegisterIP for new players — the server REQUIRES this field to be
 # present (insert fails with a DB error otherwise); any value works.

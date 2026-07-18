@@ -315,7 +315,7 @@ def action_read_account(account_id: str, task_id, backend, **_):
         }
 
         # Unconditional sync of the public Player ID into game_id.
-        update_game_id_by_username(account_id, player_id, backend_id=BACKEND_ID)
+        update_game_id_by_username(account_id, player_id)
 
         update_automation_result(
             task_id=task_id,
@@ -765,7 +765,7 @@ def action_reset_password(account_id: str, task_id, backend, **_):
                 result_description=f"Password reset successful for account: {account_id}",
                 result_data={"password": password},
             )
-            update_password_by_username(username=account_id, new_password=password, backend_id=BACKEND_ID)
+            update_password_by_username(username=account_id, new_password=password)
         else:
             logger.warning("Password reset failed. Unhandled reset response: %s", msg)
             insert_log_and_update_automation_result(

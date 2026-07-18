@@ -9,9 +9,12 @@ BACKEND_SIGNATURE = "CF"
 # — Direct HTTP API base host (Laravel + JWT; same vendor software as gameroom) —
 API_BASE_URL = "https://agentserver.cashfrenzy777.com"
 
-# — Login credentials (fallback when backend_games columns are unset) —
-USERNAME = "webcf852"
-PASSWORD = "Zaeem@123"
+# — Login credentials —
+# Real credentials live in the Laravel-managed `backend_games` row and reach
+# the client via build_client_from_backend(), which prefers backend.username /
+# backend.password. These are empty fallbacks — never commit live credentials.
+USERNAME = ""
+PASSWORD = ""
 
 # — Eligibility thresholds (consistent with the other API-based backends) —
 RECHARGE_ELIGIBLE_THRESHOLD = 20  # recharge only when player balance <= this
