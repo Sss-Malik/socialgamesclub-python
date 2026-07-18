@@ -15,6 +15,20 @@ from datetime import datetime
 # Minimum number of unassigned accounts a backend should keep on hand.
 UNASSIGNED_ACCOUNT_THRESHOLD = 10
 
+# Backends the auto-replenish task must never create accounts for.
+#
+# yolo, cashfrenzy and cashmachine were integrated 2026-07-18 and their
+# create-account paths have not yet been exercised against the live vendors.
+# Replenish runs unattended every 10 minutes and would create
+# `accounts_creation_pd` accounts per pass, so an unverified backend could
+# burn through vendor-side account limits — or silently fail every 10
+# minutes — before anyone looked. Pool top-ups stay manual (via
+# /automation/create-account) until each backend has a verified run.
+#
+# Drop a name from this set once its create-account has been confirmed
+# working in production.
+REPLENISH_EXEMPT_BACKENDS = frozenset({"yolo", "cashfrenzy", "cashmachine"})
+
 @celery_app.task(name="automation.invoke_action", bind=True)
 def invoke_action(self, backend: str, action: str, **kwargs):
     start_ts = datetime.utcnow()
@@ -44,11 +58,20 @@ def replenish_backend_accounts():
     HTTP hop: it writes the AutomationResult + AutomationRequest rows and enqueues
     `invoke_action` on the backend's own queue. Each create-account run produces
     `backend_games.accounts_creation_pd` accounts.
+
+    Backends in REPLENISH_EXEMPT_BACKENDS are skipped entirely — no task and no
+    AutomationResult row, since a row with no task behind it would sit in
+    `pending` forever and read as a hung run.
     """
     backends = get_backends_below_unassigned_threshold(UNASSIGNED_ACCOUNT_THRESHOLD)
 
     triggered = []
+    skipped = []
     for backend_id, backend_name in backends:
+        if backend_name in REPLENISH_EXEMPT_BACKENDS:
+            skipped.append(backend_name)
+            continue
+
         task_id = str(uuid4())
         insert_automation_result_and_request(
             user_id=None,
@@ -71,4 +94,7 @@ def replenish_backend_accounts():
         )
         triggered.append(backend_name)
 
-    return {"triggered": triggered, "count": len(triggered)}
+    # `skipped` is reported so an exempt backend sitting below threshold is
+    # visible in the Celery result rather than looking like the task never
+    # noticed it.
+    return {"triggered": triggered, "count": len(triggered), "skipped": skipped}
